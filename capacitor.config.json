@@ -1,0 +1,10 @@
+{
+  "appId": "com.watermgmt.app",
+  "appName": "AquaSense",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  }
+}
