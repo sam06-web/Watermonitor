@@ -1,259 +1,48 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
+import { analyzeContamination } from '../utils/waterQuality';
 
-export default function EcoDashboard({ realTimeData, waterQuality, onNavigate, onShowToast }) {
-  // Active Appliances & Valves state
-  const [appliances, setAppliances] = useState([
-    {
-      id: 'hvac',
-      name: 'HVAC Cooling & Feed',
-      type: 'green',
-      icon: '❄️',
-      currentDraw: '1.2 kW',
-      flowRate: '18 L/min',
-      status: true,
-      loadPct: 65
-    },
-    {
-      id: 'ev_pump',
-      name: 'Booster Pump Station',
-      type: 'cyan',
-      icon: '⚡',
-      currentDraw: '2.4 kW',
-      flowRate: '45 L/min',
-      status: true,
-      loadPct: 80
-    },
-    {
-      id: 'irrigation',
-      name: 'Smart Drip Zone #2',
-      type: 'green',
-      icon: '🌱',
-      currentDraw: '0.4 kW',
-      flowRate: '12 L/min',
-      status: false,
-      loadPct: 30
-    },
-    {
-      id: 'filtration',
-      name: 'RO Multi-Stage Purifier',
-      type: 'blue',
-      icon: '💧',
-      currentDraw: '0.8 kW',
-      flowRate: '25 L/min',
-      status: true,
-      loadPct: 55
-    }
-  ]);
+const formatDate = value => value ? new Date(value).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' }) : 'Not available';
 
-  const toggleAppliance = (id) => {
-    setAppliances(prev => prev.map(app => {
-      if (app.id === id) {
-        const nextStatus = !app.status;
-        if (onShowToast) {
-          onShowToast({
-            title: `${app.name}`,
-            message: `Switched ${nextStatus ? 'ON' : 'OFF'} successfully.`,
-            type: nextStatus ? 'success' : 'info'
-          });
-        }
-        return { ...app, status: nextStatus };
-      }
-      return app;
-    }));
+function Status({ status }) {
+  const label = status === 'critical' ? 'Critical' : status === 'warning' ? 'Needs attention' : 'Normal';
+  return <span className={`quality-status ${status}`}><span />{label}</span>;
+}
+
+export default function EcoDashboard({ realTimeData = {}, waterQuality = {}, satelliteObservation, satelliteRiver, contaminationPoints = [], onNavigate, onShowToast }) {
+  const values = {
+    ph: Number(waterQuality.ph) || 7.2,
+    turbidity: Number(waterQuality.turbidity) || 2.1,
+    tds: Number(realTimeData.tds) || 420
+  };
+  const analysis = useMemo(() => analyzeContamination({ ...values, satellite: satelliteObservation }), [values.ph, values.turbidity, values.tds, satelliteObservation]);
+  const latestEvent = contaminationPoints[contaminationPoints.length - 1];
+  const satelliteRisk = satelliteObservation?.pollutionRisk || 'Not evaluated';
+
+  const handleDemoAlert = () => {
+    onShowToast?.({ title: 'Use a sensor simulator', message: 'Publish a payload containing lat, lng, ph, tds_ppm, and turbidity to create a mapped quality event.', type: 'info' });
   };
 
-  // Concentric SVG progress parameters
-  const energyKwh = 12.4;
-  const waterLiters = realTimeData?.flow1 ? Math.round(realTimeData.flow1 * 40) : 240;
-  const efficiencyPct = 88;
-
-  // Outer ring (Neon Green) - Energy Efficiency
-  const outerRadius = 88;
-  const outerCircumference = 2 * Math.PI * outerRadius;
-  const outerStrokeDash = outerCircumference * 0.75;
-  const outerOffset = outerStrokeDash - (outerStrokeDash * efficiencyPct) / 100;
-
-  // Inner ring (Cyan) - Water Flow / Target
-  const innerRadius = 72;
-  const innerCircumference = 2 * Math.PI * innerRadius;
-  const innerStrokeDash = innerCircumference * 0.75;
-  const innerOffset = innerStrokeDash - (innerStrokeDash * 0.72);
-
   return (
-    <div style={{ padding: '0 1rem 1.5rem' }}>
-      {/* 1. Hero Concentric Progress Gauge Card */}
-      <div className="eco-gauge-container">
-        <div className="eco-gauge-svg-wrap">
-          <svg viewBox="0 0 220 220" width="220" height="220" style={{ transform: 'rotate(135deg)' }}>
-            {/* Outer Track (Energy) */}
-            <circle
-              cx="110"
-              cy="110"
-              r={outerRadius}
-              fill="none"
-              stroke="var(--eco-card-border)"
-              strokeWidth="10"
-              strokeDasharray={outerStrokeDash}
-              strokeLinecap="round"
-            />
-            {/* Outer Neon Green Glowing Bar */}
-            <circle
-              cx="110"
-              cy="110"
-              r={outerRadius}
-              fill="none"
-              stroke="#00e676"
-              strokeWidth="10"
-              strokeDasharray={outerStrokeDash}
-              strokeDashoffset={outerOffset}
-              strokeLinecap="round"
-              style={{ filter: 'drop-shadow(0 0 8px rgba(0, 230, 118, 0.6))', transition: 'stroke-dashoffset 1s ease' }}
-            />
+    <div className="quality-dashboard">
+      <header className="quality-page-header">
+        <div><span className="quality-kicker">Public water intelligence</span><h1>Water Quality Overview</h1><p>Continuous sensor readings with periodic satellite validation for {satelliteRiver?.name || 'your monitored water body'}.</p></div>
+        <div className="quality-live"><span /> Sensors live<br /><small>Satellite pass every ~4 days</small></div>
+      </header>
 
-            {/* Inner Track (Water) */}
-            <circle
-              cx="110"
-              cy="110"
-              r={innerRadius}
-              fill="none"
-              stroke="var(--eco-card-border)"
-              strokeWidth="10"
-              strokeDasharray={innerStrokeDash}
-              strokeLinecap="round"
-            />
-            {/* Inner Cyan Glowing Bar */}
-            <circle
-              cx="110"
-              cy="110"
-              r={innerRadius}
-              fill="none"
-              stroke="#00f0ff"
-              strokeWidth="10"
-              strokeDasharray={innerStrokeDash}
-              strokeDashoffset={innerOffset}
-              strokeLinecap="round"
-              style={{ filter: 'drop-shadow(0 0 8px rgba(0, 240, 255, 0.6))', transition: 'stroke-dashoffset 1s ease' }}
-            />
-          </svg>
+      <section className="quality-metric-grid">
+        <article className="quality-card quality-score-card"><div className="quality-card-heading"><div><span className="quality-kicker">Combined screening index</span><h2>Water Quality Index</h2></div><Status status={analysis.status} /></div><div className="quality-score-row"><strong>{analysis.score}%</strong><div className="quality-score-track"><span style={{ width: `${analysis.score}%` }} /></div></div><p>Calculated from pH, TDS, and turbidity. This is a transparent screening indicator, not a laboratory certification.</p></article>
+        <article className="quality-card"><div className="quality-card-heading"><div><span className="quality-kicker">Remote sensing</span><h2>Satellite validation</h2></div><span className="quality-source-icon">◉</span></div><div className="quality-satellite-value">{satelliteObservation?.healthScore ?? '—'}<small>/100</small></div><p>{satelliteObservation ? `Latest ${satelliteObservation.satelliteName || 'satellite'} pass: ${formatDate(satelliteObservation.imageDate)}.` : 'Waiting for the latest satellite observation.'}</p><div className="quality-source-row"><span>Pollution signal</span><strong>{satelliteRisk}</strong></div></article>
+      </section>
 
-          {/* Center Metrics */}
-          <div className="eco-gauge-inner-content">
-            <div className="eco-gauge-big-val">{energyKwh}</div>
-            <div className="eco-gauge-unit-label">KWH TODAY</div>
-            <div className="eco-gauge-sub-badge">
-              <span>💧</span> {waterLiters}L
-            </div>
-          </div>
-        </div>
+      <section><div className="quality-section-title"><div><span className="quality-kicker">Continuous sensor stream</span><h2>What sensors see now</h2></div><button className="quality-link" onClick={() => onNavigate?.('flow-monitor')}>View sensor history →</button></div><div className="quality-sensor-grid">
+        <article className="quality-card"><span className="quality-kicker">pH</span><strong className="quality-reading">{values.ph.toFixed(2)}</strong><span className="quality-unit">Acidity / alkalinity</span><Status status={analysis.components.ph >= 80 ? 'normal' : 'warning'} /></article>
+        <article className="quality-card"><span className="quality-kicker">TDS</span><strong className="quality-reading">{Math.round(values.tds)} <small>ppm</small></strong><span className="quality-unit">Dissolved solids</span><Status status={analysis.components.tds >= 80 ? 'normal' : analysis.components.tds >= 60 ? 'warning' : 'critical'} /></article>
+        <article className="quality-card"><span className="quality-kicker">Turbidity</span><strong className="quality-reading">{values.turbidity.toFixed(1)} <small>NTU</small></strong><span className="quality-unit">Water clarity</span><Status status={analysis.components.turbidity >= 80 ? 'normal' : analysis.components.turbidity >= 60 ? 'warning' : 'critical'} /></article>
+      </div></section>
 
-        {/* Bottom Sub-Stats Row */}
-        <div className="eco-sub-stats-row">
-          <div className="eco-sub-stat-col">
-            <div className="eco-sub-stat-label">ENERGY EFFICIENCY</div>
-            <div className="eco-sub-stat-val" style={{ color: 'var(--eco-green-neon)' }}>
-              {efficiencyPct}% <span style={{ fontSize: '0.9rem' }}>↗</span>
-            </div>
-          </div>
+      <section className="quality-analysis-grid"><article className={`quality-card quality-alert-card ${analysis.status}`}><div className="quality-card-heading"><div><span className="quality-kicker">Explainable analysis</span><h2>Contamination summary</h2></div><Status status={analysis.status} /></div><h3>{analysis.type}</h3><p>{analysis.cause}</p><div className="quality-abnormal-list">{analysis.abnormal.length ? analysis.abnormal.map(item => <span key={item}>{item}</span>) : <span>No abnormal indicators</span>}</div><button className="quality-link" onClick={() => onNavigate?.('map')}>{latestEvent ? 'Open affected location →' : 'Open monitoring map →'}</button></article><article className="quality-card"><div className="quality-card-heading"><div><span className="quality-kicker">Spatial context</span><h2>Where should people look?</h2></div><span className="quality-location-pin">⌖</span></div>{latestEvent ? <><div className="quality-location-name">{latestEvent.location || 'Sensor station'}</div><p>Quality event detected by continuous sensor data. The map will automatically focus on this location.</p><button className="quality-primary-button" onClick={() => onNavigate?.('map')}>View affected location</button></> : <><div className="quality-location-name">No active contamination point</div><p>When a sensor payload includes coordinates and abnormal values, the affected water body will be marked and focused automatically.</p><button className="quality-secondary-button" onClick={handleDemoAlert}>How to send a sensor event</button></>}</article></section>
 
-          <div className="eco-sub-stat-col" style={{ alignItems: 'flex-end' }}>
-            <div className="eco-sub-stat-label">RESOURCE HEALTH</div>
-            <div className="eco-sub-stat-val" style={{ color: 'var(--eco-text-main)' }}>
-              Optimal
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Active Appliances & Valve Systems */}
-      <div style={{ marginBottom: '1.25rem' }}>
-        <div className="eco-section-header">
-          <div>
-            <h3 className="eco-section-title">Active Systems</h3>
-            <div className="eco-section-sub">
-              {appliances.filter(a => a.status).length} systems drawing power & flow
-            </div>
-          </div>
-          <span className="eco-view-all-link" onClick={() => onNavigate && onNavigate('flow-monitor')}>
-            View All
-          </span>
-        </div>
-
-        <div className="eco-appliances-grid">
-          {appliances.map(app => (
-            <div key={app.id} className="eco-appliance-card">
-              <div className="eco-appliance-top">
-                <div className={`eco-appliance-icon ${app.type}`}>
-                  {app.icon}
-                </div>
-                {/* iOS Switch */}
-                <label className="eco-switch">
-                  <input
-                    type="checkbox"
-                    checked={app.status}
-                    onChange={() => toggleAppliance(app.id)}
-                  />
-                  <span className="eco-switch-track"></span>
-                </label>
-              </div>
-
-              <div>
-                <div className="eco-appliance-name">{app.name}</div>
-                <div className="eco-appliance-draw-row">
-                  <span>Current Draw</span>
-                  <strong style={{ color: app.status ? 'var(--eco-text-main)' : 'var(--eco-text-sub)' }}>
-                    {app.status ? app.currentDraw : '0.0 kW'}
-                  </strong>
-                </div>
-                <div className="eco-appliance-progress">
-                  <div
-                    className="eco-appliance-progress-bar"
-                    style={{
-                      width: app.status ? `${app.loadPct}%` : '0%',
-                      background: app.type === 'green' ? 'var(--eco-green-neon)' : app.type === 'cyan' ? '#00f0ff' : '#38bdf8'
-                    }}
-                  ></div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 3. Peak Saving Window Callout */}
-      <div className="eco-callout-card">
-        <div className="eco-callout-watermark">⚡</div>
-        <div className="eco-callout-title">Peak Saving Window</div>
-        <div className="eco-callout-desc">
-          Lower utility rates available between 11 PM and 5 AM. Schedule your heavy water filtration and pumping now.
-        </div>
-        <button
-          className="eco-callout-btn"
-          onClick={() => {
-            if (onShowToast) {
-              onShowToast({
-                title: 'Schedule Confirmed',
-                message: 'Auto-fill cycle deferred to 11:00 PM peak saving window.',
-                type: 'success'
-              });
-            }
-          }}
-        >
-          Schedule Now
-        </button>
-      </div>
-
-      {/* 4. Water Leak Alert Banner */}
-      <div className="eco-alert-card">
-        <div className="eco-alert-icon-box">💧</div>
-        <div>
-          <div className="eco-alert-title">Water Leak Alert</div>
-          <div className="eco-alert-desc">
-            {realTimeData?.leak > 0
-              ? `⚠️ Abnormal differential detected: ${realTimeData.leak} L/min pressure drop!`
-              : 'No abnormal flow detected in the main pipeline network today.'}
-          </div>
-        </div>
-      </div>
+      <section className="quality-transparency-note"><strong>Why combine both sources?</strong><span>Sensors provide continuous local measurements. Satellite imagery arrives less frequently, but validates wider spatial conditions with high-resolution remote sensing. Together they give communities both timely alerts and broader context.</span></section>
     </div>
   );
 }

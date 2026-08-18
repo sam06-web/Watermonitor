@@ -12,6 +12,7 @@ import UsageInsights from './components/UsageInsights'; // EcoSync Usage & Insig
 import Automations from './components/Automations'; // EcoSync Automations
 import Toast from './components/Toast'; // Import Toast
 import { DEFAULT_LEAKAGE_POINTS, DEFAULT_PIPES, DEFAULT_MQTT } from './constants'; // Import Constants
+import { analyzeContamination } from './utils/waterQuality';
 
 function App() {
   const [activeView, setActiveView] = useState('dashboard');
@@ -26,6 +27,9 @@ function App() {
   // State for Leakage Points (simulated or real)
   // We lift this up so MQTT can update it
   const [leakagePoints, setLeakagePoints] = useState(DEFAULT_LEAKAGE_POINTS);
+  const [contaminationPoints, setContaminationPoints] = useState([]);
+  const [satelliteObservation, setSatelliteObservation] = useState(null);
+  const [satelliteRiver, setSatelliteRiver] = useState(null);
 
   // State for Real-time Water Quality Metrics
   const [realTimeMetrics, setRealTimeMetrics] = useState({ flow1: 0, flow2: 0, leak: 0, tds: 0 });
@@ -44,6 +48,36 @@ function App() {
 
   const lastLeakNotificationRef = useRef(0);
   const clientRef = useRef(null);
+
+  // Satellite observations are intentionally loaded independently from MQTT.
+  // Sensors provide continuous readings while Sentinel observations validate spatial conditions periodically.
+  useEffect(() => {
+    fetch('/api/satellite/latest?river=cauvery')
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          setSatelliteObservation(data.observation);
+          setSatelliteRiver(data.river);
+          if (['High', 'Elevated'].includes(data.observation?.pollutionRisk) && data.river?.latitude && data.river?.longitude) {
+            const analysis = analyzeContamination({ ph: 7.2, tds: 420, turbidity: data.observation.turbidityNtu, satellite: data.observation });
+            setContaminationPoints(prev => [...prev.filter(point => point.source !== 'satellite'), {
+              id: `satellite-${data.river.id}`,
+              lat: Number(data.river.latitude),
+              lng: Number(data.river.longitude),
+              location: data.river.name,
+              severity: analysis.risk,
+              qualityScore: data.observation.healthScore ?? analysis.score,
+              contaminationType: analysis.type,
+              cause: analysis.cause,
+              source: 'satellite'
+            }]);
+          }
+        }
+      })
+      .catch(() => {
+        // The sensor dashboard remains available when the satellite service is offline.
+      });
+  }, []);
 
   // Persistence for pipes
   useEffect(() => {
@@ -167,6 +201,34 @@ function App() {
                 }
                 return [...prevLeaks, { ...payload, id: payload.id || Date.now() }];
               });
+
+              if (payload.ph !== undefined || payload.tds_ppm !== undefined || payload.turbidity !== undefined || payload.contamination) {
+                const analysis = analyzeContamination({
+                  ph: payload.ph ?? 7.2,
+                  tds: payload.tds_ppm ?? 420,
+                  turbidity: payload.turbidity ?? 2.1,
+                  satellite: satelliteObservation
+                });
+                setContaminationPoints(prev => {
+                  const point = {
+                    id: payload.id || `sensor-${payload.lat}-${payload.lng}`,
+                    lat: Number(payload.lat),
+                    lng: Number(payload.lng),
+                    location: payload.location || 'Sensor station',
+                    severity: analysis.risk,
+                    qualityScore: analysis.score,
+                    contaminationType: analysis.type,
+                    cause: analysis.cause,
+                    ph: payload.ph,
+                    tds: payload.tds_ppm,
+                    turbidity: payload.turbidity,
+                    source: 'sensor'
+                  };
+                  return prev.some(item => item.id === point.id)
+                    ? prev.map(item => item.id === point.id ? point : item)
+                    : [...prev, point];
+                });
+              }
             }
 
             // Handle TDS Data (expecting { tds_ppm: number })
@@ -283,6 +345,9 @@ function App() {
           <EcoDashboard
             realTimeData={realTimeMetrics}
             waterQuality={waterQualityMetrics}
+            satelliteObservation={satelliteObservation}
+            satelliteRiver={satelliteRiver}
+            contaminationPoints={contaminationPoints}
             onNavigate={setActiveView}
             onShowToast={(t) => setNotifications(p => [...p, { id: Date.now(), ...t }])}
           />
@@ -314,6 +379,7 @@ function App() {
               pipes={pipes}
               setPipes={setPipes}
               leakagePoints={leakagePoints}
+              contaminationPoints={contaminationPoints}
               clearLeakagePoints={() => setLeakagePoints([])}
             />
           </div>

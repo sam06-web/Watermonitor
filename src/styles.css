@@ -1944,3 +1944,41 @@ body {
   stroke: var(--eco-green-neon);
   filter: drop-shadow(0 0 6px rgba(5, 150, 105, 0.25));
 }
+
+/* Water quality transparency dashboard */
+.quality-dashboard { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+.quality-page-header, .quality-card-heading, .quality-section-title, .quality-score-row, .quality-source-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.quality-page-header { margin-bottom: 2rem; }
+.quality-page-header h1 { margin: .3rem 0; color: var(--text-primary); font-size: clamp(1.8rem, 4vw, 2.5rem); }
+.quality-page-header p, .quality-card p, .quality-transparency-note span { color: var(--text-secondary); font-size: .88rem; line-height: 1.55; }
+.quality-kicker { display: block; color: var(--text-muted); font-size: .68rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.quality-live { color: var(--success-green); font-size: .78rem; font-weight: 700; text-align: right; white-space: nowrap; }.quality-live > span { display: inline-block; width: 7px; height: 7px; margin-right: .3rem; border-radius: 50%; background: currentColor; }.quality-live small { color: var(--text-muted); font-weight: 500; }
+.quality-card { padding: 1.35rem; background: #fff; border: 1px solid var(--border-color); border-radius: 14px; box-shadow: 0 8px 24px rgba(15, 23, 42, .06); }.quality-card h2 { color: var(--text-primary); font-size: 1.1rem; margin: .2rem 0 0; }
+.quality-metric-grid, .quality-sensor-grid, .quality-analysis-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem; }.quality-sensor-grid { grid-template-columns: repeat(3, 1fr); }
+.quality-score-row { align-items: center; margin: 1.5rem 0 .7rem; }.quality-score-row > strong { color: var(--primary-blue-dark); font-size: 2.8rem; letter-spacing: -.06em; }.quality-score-track { width: 55%; height: 10px; overflow: hidden; border-radius: 99px; background: var(--bg-tertiary); }.quality-score-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--primary-blue), var(--accent-teal)); transition: width .5s ease; }
+.quality-status { display: inline-flex; align-items: center; gap: .35rem; width: fit-content; padding: .28rem .55rem; border-radius: 99px; background: #ecfdf5; color: #087443; font-size: .68rem; font-weight: 800; white-space: nowrap; }.quality-status > span { width: 6px; height: 6px; border-radius: 50%; background: #12a05c; }.quality-status.warning { background: #fff8e6; color: #a15c00; }.quality-status.warning > span { background: #e3a008; }.quality-status.critical { background: #fff1f0; color: #b42318; }.quality-status.critical > span { background: #e04438; }
+.quality-satellite-value { margin-top: 1.2rem; color: var(--primary-blue-dark); font-size: 2.2rem; font-weight: 800; }.quality-satellite-value small { color: var(--text-muted); font-size: .9rem; }.quality-source-row { border-top: 1px solid var(--border-color); padding-top: .75rem; color: var(--text-muted); font-size: .75rem; }.quality-source-row strong { color: var(--text-primary); }
+.quality-section-title { align-items: flex-end; margin-bottom: .8rem; }.quality-section-title h2 { color: var(--text-primary); font-size: 1.25rem; margin: .2rem 0 0; }.quality-link { padding: 0; border: 0; background: none; color: var(--primary-blue-dark); cursor: pointer; font-size: .78rem; font-weight: 800; }
+.quality-sensor-grid .quality-card { display: flex; flex-direction: column; gap: .45rem; }.quality-reading { color: var(--text-primary); font-size: 2rem; letter-spacing: -.04em; }.quality-reading small { color: var(--text-muted); font-size: .8rem; letter-spacing: 0; }.quality-unit { color: var(--text-muted); font-size: .75rem; margin-bottom: .45rem; }
+.quality-alert-card h3 { color: var(--text-primary); font-size: 1.15rem; margin: 1.25rem 0 .4rem; }.quality-alert-card.critical h3 { color: var(--danger-red); }.quality-alert-card.warning h3 { color: #a15c00; }.quality-abnormal-list { display: flex; flex-wrap: wrap; gap: .4rem; margin: 1rem 0; }.quality-abnormal-list span { padding: .3rem .5rem; border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-secondary); font-size: .7rem; }
+.quality-location-name { color: var(--text-primary); font-size: 1.25rem; font-weight: 800; margin-top: 1.5rem; }.quality-location-pin { color: var(--primary-blue); font-size: 1.4rem; }.quality-primary-button, .quality-secondary-button { margin-top: 1rem; padding: .65rem .85rem; border-radius: 7px; cursor: pointer; font-size: .75rem; font-weight: 800; }.quality-primary-button { color: #fff; background: var(--primary-blue-dark); }.quality-secondary-button { color: var(--primary-blue-dark); border: 1px solid var(--border-bright); background: #fff; }
+.quality-transparency-note { display: flex; gap: 1rem; align-items: flex-start; padding: 1rem 1.2rem; border: 1px solid #cfe5ef; border-radius: 10px; background: #f4fbfd; }.quality-transparency-note strong { color: var(--primary-blue-dark); font-size: .8rem; white-space: nowrap; }.quality-transparency-note span { font-size: .78rem; }
+.contamination-map-marker { background: transparent; border: 0; }.contamination-map-marker span { display: block; width: 18px; height: 18px; border: 3px solid #fff; border-radius: 50%; background: #e3a008; box-shadow: 0 1px 8px rgba(0,0,0,.35); }.contamination-map-marker span.critical { background: #e04438; }.contamination-map-marker span.normal { background: #12a05c; }
+@media (max-width: 700px) { .quality-dashboard { padding: 1.25rem 1rem 2rem; }.quality-page-header { flex-direction: column; }.quality-live { text-align: left; }.quality-metric-grid, .quality-sensor-grid, .quality-analysis-grid { grid-template-columns: 1fr; }.quality-transparency-note { flex-direction: column; gap: .35rem; }.quality-score-row { align-items: flex-start; flex-direction: column; }.quality-score-track { width: 100%; } }
+
+/* Desktop application shell */
+@media (min-width: 900px) {
+  .eco-mobile-frame { width: 100%; max-width: none; margin: 0; padding-left: 240px; box-shadow: none; }
+  .eco-top-header { min-height: 72px; padding: 1rem 2.5rem; border-bottom: 1px solid var(--eco-card-border); }
+  .eco-bottom-nav { position: fixed; inset: 0 auto 0 0; width: 240px; flex-direction: column; justify-content: flex-start; gap: .35rem; padding: 1.5rem 1rem; border: 0; border-right: 1px solid var(--eco-card-border); background: #fff; }
+  .eco-bottom-nav::before { content: '💧  AquaSentinel'; display: block; color: var(--eco-text-main); font-size: 1.15rem; font-weight: 800; letter-spacing: -.03em; padding: 0 .7rem 2rem; }
+  .eco-nav-tab { width: 100%; flex-direction: row; justify-content: flex-start; gap: .75rem; padding: .75rem .8rem; font-size: .85rem; font-weight: 600; text-transform: none; letter-spacing: 0; }
+  .eco-nav-tab.active { background: #eaf6fa; }
+  .eco-nav-tab:first-of-type { margin-top: .25rem; }
+  .quality-dashboard { max-width: 1280px; }
+}
+
+@media (min-width: 1200px) {
+  .quality-metric-grid { grid-template-columns: 1.15fr .85fr; }
+  .quality-dashboard { padding-left: 3rem; padding-right: 3rem; }
+}

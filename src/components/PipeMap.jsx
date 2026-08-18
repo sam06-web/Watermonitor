@@ -28,7 +28,15 @@ const leakIcon = new L.Icon({
     shadowSize: [41, 41]
 });
 
-const PipeMap = ({ pipes, setPipes, leakagePoints, clearLeakagePoints }) => {
+const contaminationIcon = (severity = 'warning') => L.divIcon({
+    className: 'contamination-map-marker',
+    html: `<span class="${severity}"></span>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+    popupAnchor: [0, -12]
+});
+
+const PipeMap = ({ pipes, setPipes, leakagePoints, contaminationPoints = [], clearLeakagePoints }) => {
     const mapContainer = useRef(null);
     const mapInstance = useRef(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -160,7 +168,33 @@ const PipeMap = ({ pipes, setPipes, leakagePoints, clearLeakagePoints }) => {
                 `);
         });
 
-    }, [pipes, currentPath, leakagePoints, isErasing]); // Re-render when isErasing changes to update styles
+        // Quality events are separate from infrastructure leaks so the public can see why a location is flagged.
+        contaminationPoints.forEach(point => {
+            const marker = L.marker([point.lat, point.lng], { icon: contaminationIcon(point.severity) }).addTo(map);
+            marker.bindPopup(`
+                <div style="font-family: sans-serif; min-width: 220px;">
+                    <h3 style="margin: 0 0 6px; color: #b42318;">Water Quality Alert</h3>
+                    <p style="margin: 0 0 4px;"><strong>Location:</strong> ${point.location || 'Monitoring station'}</p>
+                    <p style="margin: 0 0 4px;"><strong>Quality index:</strong> ${point.qualityScore ?? '—'} / 100</p>
+                    <p style="margin: 0 0 4px;"><strong>Type:</strong> ${point.contaminationType || 'Under analysis'}</p>
+                    <p style="margin: 0 0 4px;"><strong>Cause:</strong> ${point.cause || 'Awaiting analysis'}</p>
+                    <p style="margin: 0;"><strong>Source:</strong> ${point.source === 'satellite' ? 'Satellite validation' : 'Continuous sensor'}</p>
+                </div>
+            `);
+        });
+
+        if (contaminationPoints.length > 0) {
+            const bounds = L.latLngBounds(contaminationPoints.map(point => [point.lat, point.lng]));
+            map.fitBounds(bounds.pad(0.5), { maxZoom: 15, animate: true });
+            const latestPoint = contaminationPoints[contaminationPoints.length - 1];
+            map.eachLayer(layer => {
+                if (layer instanceof L.Marker && layer.getLatLng().lat === Number(latestPoint.lat) && layer.getLatLng().lng === Number(latestPoint.lng)) {
+                    layer.openPopup();
+                }
+            });
+        }
+
+    }, [pipes, currentPath, leakagePoints, contaminationPoints, isErasing]); // Re-render when isErasing changes to update styles
 
 
     return (
