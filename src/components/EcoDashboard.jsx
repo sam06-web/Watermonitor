@@ -91,7 +91,7 @@ export default function EcoDashboard({ realTimeData, waterQuality, onNavigate, o
               cy="110"
               r={outerRadius}
               fill="none"
-              stroke="rgba(255, 255, 255, 0.08)"
+              stroke="var(--eco-card-border)"
               strokeWidth="10"
               strokeDasharray={outerStrokeDash}
               strokeLinecap="round"
@@ -116,7 +116,7 @@ export default function EcoDashboard({ realTimeData, waterQuality, onNavigate, o
               cy="110"
               r={innerRadius}
               fill="none"
-              stroke="rgba(255, 255, 255, 0.06)"
+              stroke="var(--eco-card-border)"
               strokeWidth="10"
               strokeDasharray={innerStrokeDash}
               strokeLinecap="round"
@@ -157,7 +157,7 @@ export default function EcoDashboard({ realTimeData, waterQuality, onNavigate, o
 
           <div className="eco-sub-stat-col" style={{ alignItems: 'flex-end' }}>
             <div className="eco-sub-stat-label">RESOURCE HEALTH</div>
-            <div className="eco-sub-stat-val" style={{ color: '#ffffff' }}>
+            <div className="eco-sub-stat-val" style={{ color: 'var(--eco-text-main)' }}>
               Optimal
             </div>
           </div>
@@ -200,7 +200,7 @@ export default function EcoDashboard({ realTimeData, waterQuality, onNavigate, o
                 <div className="eco-appliance-name">{app.name}</div>
                 <div className="eco-appliance-draw-row">
                   <span>Current Draw</span>
-                  <strong style={{ color: app.status ? '#ffffff' : 'var(--eco-text-sub)' }}>
+                  <strong style={{ color: app.status ? 'var(--eco-text-main)' : 'var(--eco-text-sub)' }}>
                     {app.status ? app.currentDraw : '0.0 kW'}
                   </strong>
                 </div>

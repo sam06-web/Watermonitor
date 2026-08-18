@@ -14,18 +14,18 @@
   --warning-amber: hsl(40, 100%, 55%);
   --danger-red: hsl(0, 85%, 55%);
 
-  /* Dark Mode Colors */
-  --bg-primary: hsl(220, 20%, 8%);
-  --bg-secondary: hsl(220, 18%, 12%);
-  --bg-tertiary: hsl(220, 16%, 16%);
-  --bg-elevated: hsl(220, 18%, 18%);
+  /* Light Mode Colors */
+  --bg-primary: hsl(210, 40%, 98%);
+  --bg-secondary: hsl(0, 0%, 100%);
+  --bg-tertiary: hsl(210, 40%, 96%);
+  --bg-elevated: hsl(0, 0%, 100%);
 
-  --text-primary: hsl(0, 0%, 95%);
-  --text-secondary: hsl(0, 0%, 75%);
-  --text-muted: hsl(0, 0%, 55%);
+  --text-primary: hsl(222, 47%, 11%);
+  --text-secondary: hsl(215, 16%, 35%);
+  --text-muted: hsl(215, 16%, 47%);
 
-  --border-color: hsl(220, 16%, 22%);
-  --border-bright: hsl(220, 16%, 32%);
+  --border-color: hsl(214, 32%, 88%);
+  --border-bright: hsl(214, 25%, 75%);
 
   /* Spacing */
   --space-xs: 0.5rem;
@@ -42,10 +42,10 @@
   --radius-xl: 1rem;
 
   /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px rgba(0, 180, 255, 0.3);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 10px 25px rgba(15, 23, 42, 0.12);
+  --shadow-glow: 0 8px 24px rgba(14, 165, 233, 0.16);
 
   /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -95,7 +95,7 @@ body {
 .app-container {
   display: flex;
   min-height: 100vh;
-  background: linear-gradient(135deg, hsl(220, 20%, 8%) 0%, hsl(210, 25%, 12%) 100%);
+  background: linear-gradient(135deg, hsl(210, 40%, 98%) 0%, hsl(204, 40%, 95%) 100%);
 }
 
 /* Sidebar */
@@ -1293,16 +1293,16 @@ body {
    ========================================================================== */
 
 :root {
-  --eco-bg: #090e17;
-  --eco-card-bg: rgba(17, 24, 39, 0.85);
-  --eco-card-border: rgba(255, 255, 255, 0.08);
-  --eco-green-neon: #00e676;
+  --eco-bg: #f4f8fb;
+  --eco-card-bg: rgba(255, 255, 255, 0.94);
+  --eco-card-border: #dbe7ef;
+  --eco-green-neon: #059669;
   --eco-green-emerald: #059669;
-  --eco-cyan-bright: #00f0ff;
+  --eco-cyan-bright: #0891b2;
   --eco-blue-vibrant: #2563eb;
   --eco-blue-deep: #1e40af;
-  --eco-text-main: #ffffff;
-  --eco-text-sub: #94a3b8;
+  --eco-text-main: #102a43;
+  --eco-text-sub: #627d98;
   --eco-radius: 24px;
 }
 
@@ -1314,7 +1314,7 @@ body {
   flex-direction: column;
   background: var(--eco-bg);
   position: relative;
-  box-shadow: 0 0 50px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 50px rgba(15, 23, 42, 0.08);
 }
 
 @media (min-width: 1024px) {
@@ -1336,7 +1336,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(9, 14, 23, 0.85);
+  background: rgba(244, 248, 251, 0.9);
   backdrop-filter: blur(12px);
 }
 
@@ -1368,7 +1368,7 @@ body {
 }
 
 .eco-icon-btn {
-  background: rgba(255, 255, 255, 0.06);
+  background: #ffffff;
   border: 1px solid var(--eco-card-border);
   width: 40px;
   height: 40px;
@@ -1467,7 +1467,7 @@ body {
   justify-content: space-between;
   width: 100%;
   padding-top: 1.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--eco-card-border);
   margin-top: 1.25rem;
 }
 
@@ -1543,7 +1543,7 @@ body {
 }
 
 .eco-appliance-card:hover {
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: #b7cddd;
   transform: translateY(-2px);
 }
 
@@ -1598,7 +1598,7 @@ body {
 .eco-appliance-progress {
   width: 100%;
   height: 4px;
-  background: rgba(255, 255, 255, 0.08);
+  background: #e5edf3;
   border-radius: 2px;
   overflow: hidden;
 }
@@ -1630,7 +1630,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(255, 255, 255, 0.15);
+  background-color: #cbd5e1;
   transition: .3s;
   border-radius: 24px;
 }
@@ -1673,7 +1673,7 @@ body {
   bottom: -15px;
   font-size: 6.5rem;
   font-weight: 900;
-  color: rgba(255, 255, 255, 0.03);
+  color: rgba(16, 42, 67, 0.05);
   pointer-events: none;
   font-style: italic;
 }
@@ -1905,7 +1905,7 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(9, 14, 23, 0.95);
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(16px);
   border-top: 1px solid var(--eco-card-border);
   display: flex;
@@ -1942,5 +1942,5 @@ body {
 
 .eco-nav-tab.active svg {
   stroke: var(--eco-green-neon);
-  filter: drop-shadow(0 0 6px rgba(0, 230, 118, 0.5));
+  filter: drop-shadow(0 0 6px rgba(5, 150, 105, 0.25));
 }

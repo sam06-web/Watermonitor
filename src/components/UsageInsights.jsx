@@ -34,7 +34,7 @@ export default function UsageInsights() {
         <div style={{ display: 'flex', gap: '2rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
           <div>
             <div style={{ fontSize: '0.75rem', color: 'var(--eco-text-sub)' }}>Avg. Daily Energy</div>
-            <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#ffffff', marginTop: '0.15rem' }}>
+            <div style={{ fontSize: '1.15rem', fontWeight: '800', color: 'var(--eco-text-main)', marginTop: '0.15rem' }}>
               14.2 kWh
             </div>
           </div>
@@ -76,7 +76,7 @@ export default function UsageInsights() {
       <div className="eco-bar-chart-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <div>
-            <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#ffffff' }}>Usage Trends</div>
+          <div style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--eco-text-main)' }}>Usage Trends</div>
             <div style={{ fontSize: '0.75rem', color: 'var(--eco-text-sub)' }}>7-Day Resource Comparison</div>
           </div>
 
@@ -131,7 +131,7 @@ export default function UsageInsights() {
 
       {/* 4. Top Consumers Breakdown List */}
       <div>
-        <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#ffffff', marginBottom: '0.85rem' }}>
+        <div style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--eco-text-main)', marginBottom: '0.85rem' }}>
           Top Consumers
         </div>
 
@@ -163,7 +163,7 @@ export default function UsageInsights() {
                   {item.icon}
                 </div>
                 <div>
-                  <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.9rem' }}>{item.name}</div>
+                  <div style={{ fontWeight: '700', color: 'var(--eco-text-main)', fontSize: '0.9rem' }}>{item.name}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--eco-text-sub)' }}>{item.val} • {item.flow}</div>
                 </div>
               </div>

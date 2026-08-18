@@ -66,7 +66,7 @@ export default function Automations({ onShowToast }) {
       {/* 1. Header Section */}
       <div style={{ marginBottom: '1.25rem' }}>
         <span className="eco-pill-badge green">OPTIMIZED</span>
-        <h1 style={{ fontSize: '1.85rem', fontWeight: '900', color: '#ffffff', margin: '0.25rem 0 0.5rem', letterSpacing: '-0.03em' }}>
+        <h1 style={{ fontSize: '1.85rem', fontWeight: '900', color: 'var(--eco-text-main)', margin: '0.25rem 0 0.5rem', letterSpacing: '-0.03em' }}>
           Automations
         </h1>
         <p style={{ fontSize: '0.85rem', color: 'var(--eco-text-sub)', lineHeight: '1.5', margin: 0 }}>
@@ -83,7 +83,7 @@ export default function Automations({ onShowToast }) {
             style={{
               background: 'rgba(255, 255, 255, 0.06)',
               border: '1px solid var(--eco-card-border)',
-              color: '#ffffff',
+              color: 'var(--eco-text-main)',
               borderRadius: '12px',
               padding: '0.6rem 1.1rem',
               fontSize: '0.85rem',
@@ -166,7 +166,7 @@ export default function Automations({ onShowToast }) {
           <div style={{ fontSize: '0.65rem', color: 'var(--eco-text-sub)', textTransform: 'uppercase', fontWeight: '700' }}>
             DAILY SAVINGS
           </div>
-          <div style={{ fontSize: '1.3rem', fontWeight: '900', color: '#ffffff', marginTop: '0.2rem' }}>
+          <div style={{ fontSize: '1.3rem', fontWeight: '900', color: 'var(--eco-text-main)', marginTop: '0.2rem' }}>
             $4.20
           </div>
         </div>

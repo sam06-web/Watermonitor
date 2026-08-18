@@ -63,7 +63,7 @@ const Settings = ({ setPipes, testNotification, leakThreshold, setLeakThreshold,
                                 placeholder="ws://broker.hivemq.com:8000/mqtt"
                                 style={{
                                     width: '100%', padding: '0.75rem', borderRadius: '8px',
-                                    border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'white'
+                                    border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)'
                                 }}
                             />
                         </div>
@@ -76,7 +76,7 @@ const Settings = ({ setPipes, testNotification, leakThreshold, setLeakThreshold,
                                 placeholder="water/meter/data"
                                 style={{
                                     width: '100%', padding: '0.75rem', borderRadius: '8px',
-                                    border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'white'
+                                    border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)'
                                 }}
                             />
                         </div>
@@ -89,7 +89,7 @@ const Settings = ({ setPipes, testNotification, leakThreshold, setLeakThreshold,
                                 placeholder="Enter your Gemini API Key"
                                 style={{
                                     width: '100%', padding: '0.75rem', borderRadius: '8px',
-                                    border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'white'
+                                    border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)'
                                 }}
                             />
                             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
@@ -140,7 +140,7 @@ const Settings = ({ setPipes, testNotification, leakThreshold, setLeakThreshold,
 
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                         <div>
-                            <h3 style={{ fontSize: '1rem', color: 'white' }}>High Severity Alerts</h3>
+                            <h3 style={{ fontSize: '1rem', color: 'var(--text-primary)' }}>High Severity Alerts</h3>
                             <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Receive notifications for critical leaks</p>
                         </div>
                         <label style={{ position: 'relative', display: 'inline-block', width: '50px', height: '26px' }}>
@@ -166,7 +166,7 @@ const Settings = ({ setPipes, testNotification, leakThreshold, setLeakThreshold,
                     <div style={{ marginBottom: '1.5rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                             <div>
-                                <h3 style={{ fontSize: '1rem', color: 'white' }}>Leak Threshold</h3>
+                        <h3 style={{ fontSize: '1rem', color: 'var(--text-primary)' }}>Leak Threshold</h3>
                                 <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Minimum flow rate to trigger alert</p>
                             </div>
                             <span style={{ color: 'var(--primary-blue-light)', fontWeight: 'bold' }}>{leakThreshold} L/min</span>
@@ -188,7 +188,7 @@ const Settings = ({ setPipes, testNotification, leakThreshold, setLeakThreshold,
 
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div>
-                            <h3 style={{ fontSize: '1rem', color: 'white' }}>Dark Mode</h3>
+                            <h3 style={{ fontSize: '1rem', color: 'var(--text-primary)' }}>Dark Mode</h3>
                             <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Toggle application theme</p>
                         </div>
                         <label style={{ position: 'relative', display: 'inline-block', width: '50px', height: '26px' }}>

@@ -40,7 +40,7 @@ function App() {
   // Notifications & Dark Mode State
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [notifications, setNotifications] = useState([]);
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
 
   const lastLeakNotificationRef = useRef(0);
   const clientRef = useRef(null);
@@ -307,7 +307,7 @@ function App() {
         {activeView === 'map' && (
           <div style={{ padding: '0 1rem 1.5rem' }}>
             <div style={{ marginBottom: '1rem' }}>
-              <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff', margin: 0 }}>Infrastructure Map</h2>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--eco-text-main)', margin: 0 }}>Infrastructure Map</h2>
               <p style={{ fontSize: '0.8rem', color: 'var(--eco-text-sub)', margin: '0.2rem 0 0' }}>Pipeline network and leakage detection</p>
             </div>
             <PipeMap
@@ -322,7 +322,7 @@ function App() {
         {activeView === 'flow-monitor' && (
           <div style={{ padding: '0 1rem 1.5rem' }}>
             <div style={{ marginBottom: '1rem' }}>
-              <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff', margin: 0 }}>Flow Monitor</h2>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--eco-text-main)', margin: 0 }}>Flow Monitor</h2>
               <p style={{ fontSize: '0.8rem', color: 'var(--eco-text-sub)', margin: '0.2rem 0 0' }}>Real-time dual sensor & leakage tracking</p>
             </div>
             <FlowMonitor realTimeData={realTimeMetrics} leakThreshold={leakThreshold} />
