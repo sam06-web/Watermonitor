@@ -3,11 +3,11 @@ import RiverDB from '../../db/database.js';
 
 /**
  * River Geospatial Service
- * Provides centerline geometries, reach boundaries, and global river search fallback via OSM Nominatim.
+ * Provides water-body geometries and global river/lake search via OSM Nominatim.
  */
 export class RiverGeoService {
   /**
-   * Search for a river in SQLite DB or query OpenStreetMap Nominatim for new rivers
+   * Search cached records and query OpenStreetMap Nominatim for global rivers and lakes.
    */
   async searchRivers(query) {
     if (!query || query.trim().length === 0) {
@@ -15,53 +15,67 @@ export class RiverGeoService {
     }
 
     const trimmed = query.trim();
-    // 1. Check local indexed database first
+    // 1. Check local indexed database first, but continue to the global provider so
+    //    cached seed data never hides similarly named lakes or rivers elsewhere.
     const localMatches = RiverDB.searchRivers(trimmed);
-    if (localMatches.length > 0) {
-      return localMatches;
-    }
 
-    // 2. Fallback to OpenStreetMap Nominatim to support ANY global river
+    // 2. Query generic, river, and lake forms because Nominatim's free-text
+    //    ranking can otherwise favor nearby places over named water bodies.
     try {
-      const osmRes = await axios.get('https://nominatim.openstreetmap.org/search', {
+      const queries = [...new Set([trimmed, `${trimmed} river`, `${trimmed} lake`])];
+      const responses = await Promise.all(queries.map(queryText => axios.get('https://nominatim.openstreetmap.org/search', {
         params: {
-          q: `${trimmed} River`,
-          format: 'json',
+          q: queryText,
+          format: 'jsonv2',
+          addressdetails: 1,
+          namedetails: 1,
+          extratags: 1,
           polygon_geojson: 1,
-          limit: 5
+          dedupe: 1,
+          limit: 10
         },
-        headers: {
-          'User-Agent': 'AquaSense-Satellite-River-Monitor/1.0'
-        },
-        timeout: 5000
-      });
+        headers: { 'User-Agent': 'AquaSentinel-Water-Monitor/1.0 (water-quality-project)' },
+        timeout: 8000
+      })));
 
-      if (osmRes.data && osmRes.data.length > 0) {
-        const results = [];
-        for (const item of osmRes.data) {
+      const results = [];
+      const seen = new Set();
+      for (const response of responses) {
+        for (const item of response.data || []) {
+          const itemType = item.type || item.addresstype || '';
+          const isWaterFeature = item.class === 'waterway'
+            || (item.class === 'natural' && ['water', 'lake', 'reservoir', 'river', 'riverbank'].includes(itemType))
+            || ['river', 'lake', 'reservoir', 'stream', 'canal', 'riverbank'].includes(itemType)
+            || /\b(river|lake|reservoir|canal|stream)\b/i.test(item.display_name || '');
+          if (!isWaterFeature) continue;
+
           const lat = parseFloat(item.lat);
           const lon = parseFloat(item.lon);
-          const bbox = item.boundingbox 
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+          const name = item.namedetails?.name || item.display_name.split(',')[0];
+          const waterType = ['lake', 'reservoir', 'riverbank', 'water'].includes(itemType) || item.class === 'natural' ? 'lake' : 'river';
+          const riverId = `${item.osm_type || 'osm'}-${item.osm_id || `${lat}-${lon}`}`.toLowerCase().replace(/[^a-z0-9-]/g, '_');
+          if (seen.has(riverId)) continue;
+          seen.add(riverId);
+          const bbox = item.boundingbox
             ? [parseFloat(item.boundingbox[2]), parseFloat(item.boundingbox[0]), parseFloat(item.boundingbox[3]), parseFloat(item.boundingbox[1])]
             : [lon - 0.2, lat - 0.2, lon + 0.2, lat + 0.2];
 
-          const riverId = item.display_name.split(',')[0].toLowerCase().replace(/[^a-z0-9]/g, '_');
-          
           const newRiver = {
             id: riverId,
-            name: item.display_name.split(',')[0],
+            name,
             alternate_names: item.display_name,
             state: item.display_name.split(',').slice(1, 3).join(',').trim(),
             country: item.display_name.split(',').pop().trim(),
             latitude: lat,
             longitude: lon,
             bbox: JSON.stringify(bbox),
-            length_km: 120,
-            basin: `${item.display_name.split(',')[0]} Basin`,
-            geometry: JSON.stringify(item.geojson || {
-              type: 'LineString',
-              coordinates: [[lon - 0.1, lat - 0.05], [lon, lat], [lon + 0.1, lat + 0.05]]
-            }),
+            length_km: waterType === 'lake' ? 0 : 120,
+            basin: `${name} Basin`,
+            water_type: waterType,
+            geometry: JSON.stringify(item.geojson || (waterType === 'lake'
+              ? { type: 'Point', coordinates: [lon, lat] }
+              : { type: 'LineString', coordinates: [[lon - 0.1, lat - 0.05], [lon, lat], [lon + 0.1, lat + 0.05]] })),
             description: item.display_name
           };
 
@@ -69,13 +83,13 @@ export class RiverGeoService {
           RiverDB.insertRiver(newRiver);
           results.push(newRiver);
         }
-        return results;
       }
+      return [...localMatches, ...results].slice(0, 20);
     } catch (err) {
       console.warn('OSM Nominatim search fallback error:', err.message);
     }
 
-    return [];
+    return localMatches;
   }
 
   getRiverById(id) {

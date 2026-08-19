@@ -16,40 +16,61 @@ export class HydrologyProvider {
    * Fetch current and 7-day surface temperature and precipitation
    */
   async getSurfaceHydrology(lat, lng) {
+    return this._hydrology(lat, lng, this.openMeteoUrl, { current: 'temperature_2m,relative_humidity_2m,surface_temperature,precipitation,soil_moisture_0_to_1cm' });
+  }
+
+  /**
+   * Real historical surface temperature and precipitation for a past date
+   * (Open-Meteo / ECMWF ERA5 archive). Returns nulls when unavailable.
+   */
+  async getHistoricalHydrology(lat, lng, date) {
+    const result = await this._hydrology(lat, lng, this.historicalUrl, {}, { start_date: date, end_date: date });
+    if (!result.surfaceTemp) return result;
+    return result;
+  }
+
+  async _hydrology(lat, lng, url, queryParams, extraParams = {}) {
     try {
-      const res = await axios.get(this.openMeteoUrl, {
+      const res = await axios.get(url, {
         params: {
           latitude: lat,
           longitude: lng,
-          current: 'temperature_2m,relative_humidity_2m,surface_temperature,precipitation,soil_moisture_0_to_1cm',
           daily: 'temperature_2m_max,temperature_2m_min,precipitation_sum',
-          timezone: 'auto'
+          timezone: 'auto',
+          ...extraParams,
+          ...queryParams
         },
         timeout: 5000
       });
 
-      if (res.data && res.data.current) {
-        const c = res.data.current;
+      if (res.data) {
+        const c = res.data.current || {};
+        const surfaceTemp = c.surface_temperature ?? c.temperature_2m ?? null;
+        const dailyMax = res.data.daily?.temperature_2m_max?.[0] ?? null;
+        const dailyMin = res.data.daily?.temperature_2m_min?.[0] ?? null;
+        const rain = res.data.daily?.precipitation_sum?.[0] ?? null;
+        const isSurfaceValid = surfaceTemp != null && Number.isFinite(Number(surfaceTemp));
+        const isDailyValid = dailyMax != null && Number.isFinite(Number(dailyMax));
         return {
-          surfaceTemp: c.surface_temperature ?? c.temperature_2m ?? 26.5,
-          airTemp: c.temperature_2m ?? 27.0,
-          humidity: c.relative_humidity_2m ?? 65,
-          precipitationMm: c.precipitation ?? 0.0,
-          soilMoisture: c.soil_moisture_0_to_1cm ?? 0.28,
-          dailyRainfall: res.data.daily?.precipitation_sum?.[0] ?? 0.0
+          surfaceTemp: isSurfaceValid ? Number(surfaceTemp) : (isDailyValid ? Number(dailyMax) : null),
+          airTemp: c.temperature_2m != null && Number.isFinite(Number(c.temperature_2m)) ? Number(c.temperature_2m) : null,
+          humidity: c.relative_humidity_2m != null && Number.isFinite(Number(c.relative_humidity_2m)) ? Number(c.relative_humidity_2m) : null,
+          precipitationMm: c.precipitation != null && Number.isFinite(Number(c.precipitation)) ? Number(c.precipitation) : null,
+          soilMoisture: c.soil_moisture_0_to_1cm != null && Number.isFinite(Number(c.soil_moisture_0_to_1cm)) ? Number(c.soil_moisture_0_to_1cm) : null,
+          dailyRainfall: rain != null && Number.isFinite(Number(rain)) ? Number(rain) : null
         };
       }
     } catch (err) {
-      console.warn('Hydrology API request failed, using modeled physics fallback:', err.message);
+      console.warn('Hydrology API request failed:', err.message);
     }
 
     return {
-      surfaceTemp: 26.8,
-      airTemp: 27.2,
-      humidity: 62,
-      precipitationMm: 0.0,
-      soilMoisture: 0.25,
-      dailyRainfall: 0.0
+      surfaceTemp: null,
+      airTemp: null,
+      humidity: null,
+      precipitationMm: null,
+      soilMoisture: null,
+      dailyRainfall: null
     };
   }
 }

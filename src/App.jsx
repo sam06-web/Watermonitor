@@ -8,8 +8,6 @@ import Settings from './components/Settings'; // Import Settings
 import FlowMonitor from './components/FlowMonitor'; // Import FlowMonitor
 import SatelliteMonitoring from './components/SatelliteMonitoring'; // Satellite River Monitoring
 import EcoDashboard from './components/EcoDashboard'; // EcoSync Main Dashboard
-import UsageInsights from './components/UsageInsights'; // EcoSync Usage & Insights
-import Automations from './components/Automations'; // EcoSync Automations
 import Toast from './components/Toast'; // Import Toast
 import { DEFAULT_LEAKAGE_POINTS, DEFAULT_PIPES, DEFAULT_MQTT } from './constants'; // Import Constants
 import { analyzeContamination } from './utils/waterQuality';
@@ -30,6 +28,9 @@ function App() {
   const [contaminationPoints, setContaminationPoints] = useState([]);
   const [satelliteObservation, setSatelliteObservation] = useState(null);
   const [satelliteRiver, setSatelliteRiver] = useState(null);
+  const [selectedSatelliteWaterBody, setSelectedSatelliteWaterBody] = useState('cauvery');
+  const [modelPrediction, setModelPrediction] = useState(null);
+  const [modelStatus, setModelStatus] = useState('idle');
 
   // State for Real-time Water Quality Metrics
   const [realTimeMetrics, setRealTimeMetrics] = useState({ flow1: 0, flow2: 0, leak: 0, tds: 0 });
@@ -52,7 +53,8 @@ function App() {
   // Satellite observations are intentionally loaded independently from MQTT.
   // Sensors provide continuous readings while Sentinel observations validate spatial conditions periodically.
   useEffect(() => {
-    fetch('/api/satellite/latest?river=cauvery')
+    const controller = new AbortController();
+    fetch(`/api/satellite/latest?river=${encodeURIComponent(selectedSatelliteWaterBody)}`, { signal: controller.signal })
       .then(response => response.json())
       .then(data => {
         if (data.success) {
@@ -74,10 +76,42 @@ function App() {
           }
         }
       })
-      .catch(() => {
+      .catch(error => {
+        if (error.name === 'AbortError') return;
         // The sensor dashboard remains available when the satellite service is offline.
       });
-  }, []);
+    return () => controller.abort();
+  }, [selectedSatelliteWaterBody]);
+
+  // Ask the Python model for a prediction whenever a complete sensor sample changes.
+  useEffect(() => {
+    const sample = {
+      ph: Number(waterQualityMetrics.ph),
+      tds: Number(realTimeMetrics.tds),
+      turbidity: Number(waterQualityMetrics.turbidity)
+    };
+    if (![sample.ph, sample.tds, sample.turbidity].every(Number.isFinite) || Object.values(sample).some(value => value <= 0)) return;
+
+    const controller = new AbortController();
+    setModelStatus('loading');
+    fetch('/api/water-quality/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sample),
+      signal: controller.signal
+    })
+      .then(response => response.json().then(data => ({ ok: response.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) throw new Error(data.error || 'Prediction failed');
+        setModelPrediction(data);
+        setModelStatus('ready');
+      })
+      .catch(error => {
+        if (error.name !== 'AbortError') setModelStatus('unavailable');
+      });
+
+    return () => controller.abort();
+  }, [realTimeMetrics.tds, waterQualityMetrics.ph, waterQualityMetrics.turbidity]);
 
   // Persistence for pipes
   useEffect(() => {
@@ -348,23 +382,17 @@ function App() {
             satelliteObservation={satelliteObservation}
             satelliteRiver={satelliteRiver}
             contaminationPoints={contaminationPoints}
+            modelPrediction={modelPrediction}
+            modelStatus={modelStatus}
             onNavigate={setActiveView}
-            onShowToast={(t) => setNotifications(p => [...p, { id: Date.now(), ...t }])}
-          />
-        )}
-
-        {activeView === 'usage' && (
-          <UsageInsights />
-        )}
-
-        {activeView === 'automations' && (
-          <Automations
             onShowToast={(t) => setNotifications(p => [...p, { id: Date.now(), ...t }])}
           />
         )}
 
         {activeView === 'satellite' && (
           <SatelliteMonitoring
+            selectedWaterBodyId={selectedSatelliteWaterBody}
+            onWaterBodyChange={setSelectedSatelliteWaterBody}
             onShowToast={(toast) => setNotifications(prev => [...prev, { id: Date.now(), ...toast }])}
           />
         )}
@@ -429,36 +457,6 @@ function App() {
             <rect x="3" y="14" width="7" height="7" rx="1.5" />
           </svg>
           <span>Dashboard</span>
-        </button>
-
-        <button
-          className={`eco-nav-tab ${activeView === 'usage' ? 'active' : ''}`}
-          onClick={() => setActiveView('usage')}
-        >
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2">
-            <line x1="18" y1="20" x2="18" y2="10" />
-            <line x1="12" y1="20" x2="12" y2="4" />
-            <line x1="6" y1="20" x2="6" y2="14" />
-          </svg>
-          <span>Usage</span>
-        </button>
-
-        <button
-          className={`eco-nav-tab ${activeView === 'automations' ? 'active' : ''}`}
-          onClick={() => setActiveView('automations')}
-        >
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2">
-            <line x1="4" y1="21" x2="4" y2="14" />
-            <line x1="4" y1="10" x2="4" y2="3" />
-            <line x1="12" y1="21" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12" y2="3" />
-            <line x1="20" y1="21" x2="20" y2="16" />
-            <line x1="20" y1="12" x2="20" y2="3" />
-            <circle cx="4" cy="12" r="2" />
-            <circle cx="12" cy="10" r="2" />
-            <circle cx="20" cy="14" r="2" />
-          </svg>
-          <span>Flows</span>
         </button>
 
         <button

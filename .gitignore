@@ -23,3 +23,11 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# SQLite database files (regenerated at startup)
+server/db/*.db
+server/db/*.db-shm
+server/db/*.db-wal
+
+# Real satellite image cache (rendered PNGs)
+server/cache/

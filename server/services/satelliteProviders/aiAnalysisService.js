@@ -10,18 +10,23 @@ export class AiAnalysisService {
    * Synthesize remote sensing indices into AI metrics
    */
   synthesizeAnalysis(metrics) {
+    const clean = (value, fallback) => {
+      const numeric = Number(value);
+      return value != null && Number.isFinite(numeric) ? numeric : fallback;
+    };
+
     const {
-      riverName = 'River',
-      ndwi = 0.5,
-      ndvi = 0.6,
-      waterArea = 50.0,
-      baselineArea = 50.0,
-      turbidity = 12.0,
-      temperature = 26.5,
-      riverWidth = 100.0,
-      cloudCover = 10.0,
-      recentPrecipitation = 0.0
+      riverName = 'River'
     } = metrics;
+    const ndwi = clean(metrics.ndwi, 0.5);
+    const ndvi = clean(metrics.ndvi, 0.6);
+    const waterArea = clean(metrics.waterArea, 50.0);
+    const baselineArea = clean(metrics.baselineArea, 50.0);
+    const turbidity = clean(metrics.turbidity, 12.0);
+    const temperature = clean(metrics.temperature, 26.5);
+    const riverWidth = clean(metrics.riverWidth, 100.0);
+    const cloudCover = clean(metrics.cloudCover, 10.0);
+    const recentPrecipitation = clean(metrics.recentPrecipitation, 0.0);
 
     // 1. Water Surface Expansion Ratio
     const areaRatio = waterArea / (baselineArea || 1);

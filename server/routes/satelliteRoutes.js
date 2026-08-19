@@ -1,12 +1,67 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
 import RiverDB from '../db/database.js';
+import config from '../config/config.js';
 import RiverGeoService from '../services/satelliteProviders/riverGeoService.js';
-import StacSatelliteProvider from '../services/satelliteProviders/stacProvider.js';
 import HydrologyProvider from '../services/satelliteProviders/hydrologyProvider.js';
-import SwotHydrologyProvider from '../services/satelliteProviders/swotHydrologyProvider.js';
 import AiAnalysisService from '../services/satelliteProviders/aiAnalysisService.js';
 
 const router = express.Router();
+const SATELLITE_REFRESH_INTERVAL_MS = 4 * 24 * 60 * 60 * 1000;
+const SATELLITE_REFRESH_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+const IMAGE_CACHE_DIR = config.satellite.imageCacheDir;
+
+// Tracks the last time a full satellite/SWOT reprocess was attempted per river so
+// page loads never re-trigger an expensive pipeline more often than the cooldown.
+const lastRefreshAttempt = new Map();
+
+function safeFileName(value) {
+  return String(value).toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+}
+
+function ensureCacheDir() {
+  fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
+}
+
+function cachedImagePath(riverQuery, dateStr, type) {
+  return path.join(IMAGE_CACHE_DIR, `${safeFileName(riverQuery)}-${dateStr}-${type}.png`);
+}
+
+function writeCachedImages(riverId, dateStr, images = {}) {
+  ensureCacheDir();
+  const urls = {};
+  for (const [type, base64Data] of Object.entries(images)) {
+    const filename = `${safeFileName(riverId)}-${dateStr}-${type}.png`;
+    fs.writeFileSync(path.join(IMAGE_CACHE_DIR, filename), Buffer.from(base64Data, 'base64'));
+    urls[type] = `/api/satellite/image?river=${encodeURIComponent(riverId)}&type=${type}&date=${encodeURIComponent(dateStr)}`;
+  }
+  return urls;
+}
+
+/**
+ * Fetch real SWOT reach metrics (width, water surface elevation, slope) from
+ * the Python processor. Requires a NASA Earthdata token; returns null otherwise.
+ */
+async function fetchSwotMetrics(river, token) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 240000);
+  try {
+    const response = await fetch(`${config.ml.url}/swot/process`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat: Number(river.latitude), lng: Number(river.longitude), token }),
+      signal: controller.signal
+    });
+    const data = await response.json();
+    return data.source === 'real' ? data : null;
+  } catch (error) {
+    console.warn(`SWOT enrichment failed for ${river.name}: ${error.message}`);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * Helper to resolve a river from query parameter (id, name, or default)
@@ -28,7 +83,7 @@ async function resolveRiver(req) {
 
 /**
  * GET /api/satellite/search?river=
- * Search rivers by name or return standard list
+ * Search global rivers, lakes, reservoirs, and other named water bodies.
  */
 router.get('/search', async (req, res) => {
   try {
@@ -47,6 +102,7 @@ router.get('/search', async (req, res) => {
         bbox: typeof r.bbox === 'string' ? JSON.parse(r.bbox) : r.bbox,
         length_km: r.length_km,
         basin: r.basin,
+        waterType: r.water_type || 'river',
         description: r.description
       }))
     });
@@ -68,10 +124,39 @@ router.get('/latest', async (req, res) => {
     }
 
     let observation = RiverDB.getLatestObservation(river.id);
+    const isObservationReal = observation?.raw_metadata?.includes('"source":"real"') ?? false;
+    const observationTime = new Date(observation?.image_timestamp || observation?.image_date || 0).getTime();
+    const isObservationStale = !Number.isFinite(observationTime) || Date.now() - observationTime >= SATELLITE_REFRESH_INTERVAL_MS;
 
-    // If no observation exists, generate a fresh real one from STAC & Hydrology
-    if (!observation) {
-      observation = await refreshRiverObservation(river);
+    // Stale-while-revalidate: if a real observation exists, respond immediately and
+    // reprocess the pipeline in the background at most once per cooldown window.
+    // This keeps page loads instant even when the underlying scene is old or the
+    // ML processor is cold. Without any real observation we must block instead.
+    const lastAttempt = lastRefreshAttempt.get(river.id) || 0;
+    const shouldRefresh = isObservationStale && Date.now() - lastAttempt >= SATELLITE_REFRESH_COOLDOWN_MS;
+    if (isObservationReal && observation) {
+      if (shouldRefresh) {
+        lastRefreshAttempt.set(river.id, Date.now());
+        refreshRiverObservation(river)
+          .then(() => {
+            observation = RiverDB.getLatestObservation(river.id);
+          })
+          .catch(error => console.warn(`Real satellite refresh failed for ${river.name}: ${error.message}`));
+      }
+    } else {
+      lastRefreshAttempt.set(river.id, Date.now());
+      try {
+        observation = await refreshRiverObservation(river);
+      } catch (error) {
+        console.warn(`Real satellite refresh failed for ${river.name}: ${error.message}`);
+        if (!observation) {
+          return res.status(503).json({
+            success: false,
+            message: 'No real satellite observation is available yet. The live sensor dashboard remains fully operational.',
+            error: error.message
+          });
+        }
+      }
     }
 
     const geometry = typeof river.geometry === 'string' ? JSON.parse(river.geometry) : river.geometry;
@@ -224,95 +309,264 @@ router.post('/refresh', async (req, res) => {
 });
 
 /**
- * Helper to fetch real live observation from external APIs & insert into DB
+ * Helper to fetch a REAL Sentinel-2 observation for a river.
+ * The Python service queries the STAC catalog, reads the actual band COGs
+ * clipped to the river bbox, and computes NDVI/NDWI/water area/turbidity
+ * plus real rendered images. No values are synthesized here.
  */
 async function refreshRiverObservation(river) {
-  const [stacScene, hydroData] = await Promise.all([
-    StacSatelliteProvider.getLatestObservation(river).catch(() => null),
-    HydrologyProvider.getSurfaceHydrology(river.latitude, river.longitude).catch(() => null)
-  ]);
+  let bbox = river.bbox;
+  try {
+    bbox = typeof bbox === 'string' ? JSON.parse(bbox) : bbox;
+  } catch {
+    bbox = null;
+  }
+  if (!Array.isArray(bbox) || bbox.length !== 4) {
+    bbox = [
+      Number(river.longitude) - 0.3,
+      Number(river.latitude) - 0.3,
+      Number(river.longitude) + 0.3,
+      Number(river.latitude) + 0.3
+    ];
+  }
 
-  const existing = RiverDB.getLatestObservation(river.id);
-  const baseArea = existing ? existing.water_area : 50;
-  const baseWidth = existing ? existing.river_width : 100;
-  const baseElevation = existing ? existing.water_level || 300 : 300;
+  const end = new Date().toISOString().split('T')[0];
+  const start = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  const swotData = SwotHydrologyProvider.calculateReachMetrics(river.id, baseWidth, baseElevation);
+  let real;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 150000);
+    const response = await fetch(`${config.ml.url}/satellite/process`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bbox,
+        lat: Number(river.latitude),
+        lng: Number(river.longitude),
+        max_cloud: 60,
+        start,
+        end
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    if (!response.ok) {
+      throw new Error(`Satellite processor returned HTTP ${response.status}`);
+    }
+    real = await response.json();
+  } catch (error) {
+    console.error('Real satellite processing failed:', error.message);
+    throw new Error('Real Sentinel-2 processing unavailable. No observation was synthesized.');
+  }
 
-  const satelliteName = stacScene?.satelliteName || 'Sentinel-2B MSI';
-  const sensor = stacScene?.sensor || 'MSI Level-2A (BOA Reflectance)';
-  const resolution = stacScene?.resolution || '10m Multispectral';
-  const cloudCover = stacScene?.cloudCover ?? 8.4;
-  const todayStr = new Date().toISOString().split('T')[0];
-  const timestampStr = new Date().toISOString();
+  if (real.source !== 'real') {
+    throw new Error(real.error || 'No real Sentinel-2 scene was available for this water body.');
+  }
 
-  const temp = hydroData?.surfaceTemp ?? 26.8;
-  const ndwi = Number((0.52 + (Math.sin(Date.now() / 86400000) * 0.05)).toFixed(3));
-  const ndvi = Number((0.60 + (Math.cos(Date.now() / 86400000) * 0.04)).toFixed(3));
-  const waterArea = Number((baseArea * (1 + (ndwi - 0.5) * 0.2)).toFixed(2));
-  const turbidity = Number((12.4 + Math.sin(Date.now() / 43200000) * 3).toFixed(1));
+  await persistRealObservation(river, real, bbox);
+  return RiverDB.getLatestObservation(river.id);
+}
+
+/**
+ * Persist one REAL satellite scene as a satellite_observations row, computing the
+ * AI health/flood/pollution synthesis from the measured indices. Optional live
+ * SWOT + hydrology enrichment is fetched for the newest scene only (backfill rows
+ * keep temperature null when enrichment is skipped to stay fast).
+ */
+async function persistRealObservation(river, real, bbox, { enrichment = 'live' } = {}) {
+  let hydroData = null;
+  let swotData = null;
+  const swotToken = config.providers.swot.token || config.providers.swot.podaacApiKey;
+  const sceneDate = String(real.scene?.datetime || new Date().toISOString()).slice(0, 10);
+  if (enrichment === 'historical') {
+    hydroData = await HydrologyProvider.getHistoricalHydrology(river.latitude, river.longitude, sceneDate).catch(() => null);
+  } else {
+    [hydroData, swotData] = await Promise.all([
+      HydrologyProvider.getSurfaceHydrology(river.latitude, river.longitude).catch(() => null),
+      swotToken ? fetchSwotMetrics(river, swotToken) : Promise.resolve(null)
+    ]);
+  }
+
+  const existingScene = RiverDB.getObservationByScene(river.id, sceneDate, real.scene?.platform);
+
+  const temperature = Number.isFinite(Number(hydroData?.surfaceTemp)) ? Number(hydroData.surfaceTemp) : null;
+  const riverWidth = Number.isFinite(Number(swotData?.width_m)) ? Number(swotData.width_m) : real.river_width_m;
 
   const aiResult = AiAnalysisService.synthesizeAnalysis({
     riverName: river.name,
-    ndwi: ndwi,
-    ndvi: ndvi,
-    waterArea: waterArea,
-    baselineArea: baseArea,
-    turbidity: turbidity,
-    temperature: temp,
-    riverWidth: swotData.riverWidthMeters,
-    cloudCover: cloudCover,
+    ndwi: real.ndwi,
+    ndvi: real.ndvi,
+    waterArea: real.water_area_km2,
+    baselineArea: real.water_area_km2,
+    turbidity: real.turbidity_ntu,
+    temperature,
+    riverWidth,
+    cloudCover: real.scene?.cloud_cover ?? 0,
     recentPrecipitation: hydroData?.dailyRainfall || 0
   });
 
-  const rgbImg = `/api/satellite/image?river=${river.id}&type=rgb&date=${todayStr}`;
-  const ndwiImg = `/api/satellite/image?river=${river.id}&type=ndwi&date=${todayStr}`;
-  const falseColorImg = `/api/satellite/image?river=${river.id}&type=false_color&date=${todayStr}`;
-  const prevDate = new Date();
+  if (existingScene) {
+    const storedTemp = Number(existingScene.temperature);
+    const needsHistoricalTemp = enrichment === 'historical' && (!Number.isFinite(storedTemp) || storedTemp <= 0);
+    if (needsHistoricalTemp || enrichment === 'historical') {
+      RiverDB.updateObservation({
+        id: existingScene.id,
+        temperature: temperature ?? 0,
+        flood_status: aiResult.floodStatus,
+        flood_risk_pct: aiResult.floodRiskPct,
+        health_score: aiResult.healthScore,
+        water_availability: aiResult.waterAvailability,
+        pollution_risk: aiResult.pollutionRisk,
+        ai_summary: aiResult.summary,
+        ai_recommendation: aiResult.recommendation,
+        raw_metadata: JSON.stringify({ source: 'real', scene: real.scene, hydrology: hydroData, provider: 'Sentinel-2 L2A (Planetary Computer / AWS)', refreshedAt: new Date().toISOString() })
+      });
+    }
+    return;
+  }
+const imageUrls = writeCachedImages(river.id, sceneDate, real.images || {});
+
+  const prevDate = new Date(sceneDate);
   prevDate.setDate(prevDate.getDate() - 15);
-  const prevImg = `/api/satellite/image?river=${river.id}&type=rgb&date=${prevDate.toISOString().split('T')[0]}`;
+  const prevDateStr = prevDate.toISOString().split('T')[0];
 
   const newObsData = {
     river_id: river.id,
     river_name: river.name,
     latitude: river.latitude,
     longitude: river.longitude,
-    bbox: river.bbox,
-    satellite_name: satelliteName,
-    sensor: sensor,
-    image_date: todayStr,
-    image_timestamp: timestampStr,
-    cloud_cover: cloudCover,
-    resolution: resolution,
-    ndwi: ndwi,
-    ndvi: ndvi,
-    water_area: waterArea,
-    river_width: swotData.riverWidthMeters,
-    temperature: temp,
-    turbidity: turbidity,
+    bbox: typeof bbox === 'string' ? bbox : JSON.stringify(bbox),
+    satellite_name: real.scene?.platform || 'Sentinel-2',
+    sensor: real.scene?.grid || 'MSI Level-2A (BOA Reflectance)',
+    image_date: sceneDate,
+    image_timestamp: real.scene?.datetime || new Date().toISOString(),
+    cloud_cover: real.scene?.cloud_cover ?? 0,
+    resolution: real.scene?.grid || '10m Multispectral',
+    ndwi: real.ndwi,
+    ndvi: real.ndvi,
+    water_area: real.water_area_km2,
+    river_width: riverWidth,
+    temperature: temperature ?? 0,
+    turbidity: real.turbidity_ntu,
     flood_status: aiResult.floodStatus,
     flood_risk_pct: aiResult.floodRiskPct,
-    water_level: swotData.waterSurfaceElevation,
+    water_level: Number.isFinite(Number(swotData?.wse_m)) ? Number(swotData.wse_m) : null,
     health_score: aiResult.healthScore,
     water_availability: aiResult.waterAvailability,
     pollution_risk: aiResult.pollutionRisk,
     ai_summary: aiResult.summary,
     ai_recommendation: aiResult.recommendation,
-    image_url: rgbImg,
-    ndwi_image_url: ndwiImg,
-    false_color_image_url: falseColorImg,
-    prev_image_url: prevImg,
+    image_url: imageUrls.rgb || `/api/satellite/image?river=${encodeURIComponent(river.id)}&type=rgb&date=${sceneDate}`,
+    ndwi_image_url: imageUrls.ndwi || `/api/satellite/image?river=${encodeURIComponent(river.id)}&type=ndwi&date=${sceneDate}`,
+    false_color_image_url: imageUrls.false_color || `/api/satellite/image?river=${encodeURIComponent(river.id)}&type=false_color&date=${sceneDate}`,
+    prev_image_url: `/api/satellite/image?river=${encodeURIComponent(river.id)}&type=rgb&date=${prevDateStr}`,
     raw_metadata: JSON.stringify({
-      provider: 'Sentinel-2 BOA / STAC & SWOT KaRIn',
+      source: 'real',
+      scene: real.scene,
       swot: swotData,
+      bbox,
       hydrology: hydroData,
-      refreshedAt: timestampStr
+      provider: 'Sentinel-2 L2A (Planetary Computer / AWS) + NASA SWOT',
+      refreshedAt: new Date().toISOString()
     })
   };
 
   RiverDB.insertObservation(newObsData);
-  return RiverDB.getLatestObservation(river.id);
 }
+
+/**
+ * POST /api/satellite/backfill?river=
+ * Ingests REAL historical Sentinel-2 observations across a date range so the
+ * history chart is built from actual remote-sensing data, not placeholders.
+ * Body: { start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' } (default: last 180 days).
+ */
+router.post('/backfill', async (req, res) => {
+  try {
+    const river = await resolveRiver(req);
+    let bbox = river.bbox;
+    try {
+      bbox = typeof bbox === 'string' ? JSON.parse(bbox) : bbox;
+    } catch {
+      bbox = null;
+    }
+    if (!Array.isArray(bbox) || bbox.length !== 4) {
+      bbox = [
+        Number(river.longitude) - 0.3,
+        Number(river.latitude) - 0.3,
+        Number(river.longitude) + 0.3,
+        Number(river.latitude) + 0.3
+      ];
+    }
+
+    const end = req.body?.end || new Date().toISOString().split('T')[0];
+    const start = req.body?.start || new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const fetchChunk = async (chunkStart, chunkEnd) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 230000);
+      try {
+        const chunkRes = await fetch(`${config.ml.url}/satellite/backfill`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bbox,
+            lat: Number(river.latitude),
+            lng: Number(river.longitude),
+            max_cloud: 60,
+            start: chunkStart,
+            end: chunkEnd
+          }),
+          signal: controller.signal
+        });
+        return await chunkRes.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+
+    const CHUNK_DAYS = 60;
+    const chunkStartMs = new Date(start).getTime();
+    const chunkEndMs = new Date(end).getTime();
+    const chunks = [];
+    for (let cursor = chunkStartMs; cursor <= chunkEndMs; cursor += CHUNK_DAYS * 24 * 60 * 60 * 1000) {
+      const chunkEndDate = new Date(Math.min(cursor + CHUNK_DAYS * 24 * 60 * 60 * 1000 - 1, chunkEndMs)).toISOString().split('T')[0];
+      chunks.push([new Date(cursor).toISOString().split('T')[0], chunkEndDate]);
+    }
+
+    let inserted = 0;
+    let scenesFound = 0;
+    let skipped = 0;
+    let chunkErrors = [];
+    for (const [chunkStart, chunkEnd] of chunks) {
+      const payload = await fetchChunk(chunkStart, chunkEnd);
+      if (payload.source !== 'real') {
+        chunkErrors.push(`${chunkStart}: ${payload.error || 'chunk failed'}`);
+        continue;
+      }
+      scenesFound += payload.count;
+      for (const real of payload.observations) {
+        await persistRealObservation(river, real, bbox, { enrichment: 'historical' });
+        inserted += 1;
+      }
+      skipped += payload.errors;
+    }
+
+    res.json({
+      success: true,
+      message: `Ingested ${inserted} real historical satellite observations for ${river.name}`,
+      start,
+      end,
+      count: inserted,
+      scenes: scenesFound,
+      skipped,
+      chunkErrors
+    });
+  } catch (error) {
+    console.error('Backfill satellite history error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 /**
  * GET /api/satellite/image?river=&satellite=&type=&date=
@@ -320,128 +574,36 @@ async function refreshRiverObservation(river) {
  */
 router.get('/image', (req, res) => {
   const type = (req.query.type || 'rgb').toLowerCase();
-  const riverQuery = (req.query.river || 'cauvery').toUpperCase();
+  const riverQuery = req.query.river || 'cauvery';
   const dateStr = req.query.date || new Date().toISOString().split('T')[0];
 
-  res.setHeader('Content-Type', 'image/svg+xml');
-  res.setHeader('Cache-Control', 'public, max-age=3600');
-
-  let bgGradient = `
-    <radialGradient id="landGrad" cx="50%" cy="50%" r="70%">
-      <stop offset="0%" stop-color="#14281d" />
-      <stop offset="60%" stop-color="#0e1d15" />
-      <stop offset="100%" stop-color="#08100c" />
-    </radialGradient>
-    <linearGradient id="riverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0284c7" />
-      <stop offset="50%" stop-color="#06b6d4" />
-      <stop offset="100%" stop-color="#0369a1" />
-    </linearGradient>
-  `;
-
-  let modeTitle = 'TRUE COLOR RGB (B4-B3-B2)';
-  let filterColor = '#06b6d4';
-
-  if (type === 'ndwi') {
-    modeTitle = 'NDWI WATER EXTRACTION (B3-B8)';
-    filterColor = '#00f0ff';
-    bgGradient = `
-      <radialGradient id="landGrad" cx="50%" cy="50%" r="70%">
-        <stop offset="0%" stop-color="#18181b" />
-        <stop offset="100%" stop-color="#09090b" />
-      </radialGradient>
-      <linearGradient id="riverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#00f0ff" />
-        <stop offset="50%" stop-color="#38bdf8" />
-        <stop offset="100%" stop-color="#0284c7" />
-      </linearGradient>
-    `;
-  } else if (type === 'false_color') {
-    modeTitle = 'FALSE COLOR INFRARED (B8-B4-B3)';
-    filterColor = '#ec4899';
-    bgGradient = `
-      <radialGradient id="landGrad" cx="50%" cy="50%" r="70%">
-        <stop offset="0%" stop-color="#831843" />
-        <stop offset="60%" stop-color="#500724" />
-        <stop offset="100%" stop-color="#2a0011" />
-      </radialGradient>
-      <linearGradient id="riverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#0284c7" />
-        <stop offset="50%" stop-color="#0369a1" />
-        <stop offset="100%" stop-color="#0c4a6e" />
-      </linearGradient>
-    `;
-  } else if (type === 'moisture') {
-    modeTitle = 'MOISTURE INDEX NDMI (B8-B11)';
-    filterColor = '#10b981';
-    bgGradient = `
-      <radialGradient id="landGrad" cx="50%" cy="50%" r="70%">
-        <stop offset="0%" stop-color="#064e3b" />
-        <stop offset="100%" stop-color="#022c22" />
-      </radialGradient>
-      <linearGradient id="riverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#34d399" />
-        <stop offset="100%" stop-color="#059669" />
-      </linearGradient>
-    `;
+  const cachedFile = cachedImagePath(riverQuery, dateStr, type);
+  if (fs.existsSync(cachedFile)) {
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.sendFile(cachedFile);
   }
 
-  const svg = `
+  const escapeXml = value => String(value).replace(/[<>&'\"]/g, character => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[character]));
+  const riverLabel = escapeXml(riverQuery);
+  const dateLabel = escapeXml(dateStr);
+
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.setHeader('Cache-Control', 'public, max-age=600');
+
+  const placeholder = `
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%">
-    <defs>
-      ${bgGradient}
-      <filter id="waterGlow" x="-20%" y="-20%" width="140%" height="140%">
-        <feGaussianBlur stdDeviation="8" result="blur" />
-        <feComposite in="SourceGraphic" in2="blur" operator="over" />
-      </filter>
-      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
-      </pattern>
-    </defs>
-
-    <!-- Background Terrain Texture -->
-    <rect width="800" height="500" fill="url(#landGrad)"/>
-    <rect width="800" height="500" fill="url(#grid)"/>
-
-    <!-- Terrain Topography Lines -->
-    <path d="M 0 120 Q 200 80, 400 130 T 800 100" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.5" stroke-dasharray="6,4"/>
-    <path d="M 0 280 Q 250 240, 500 300 T 800 260" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.5" stroke-dasharray="6,4"/>
-    <path d="M 0 420 Q 300 380, 600 440 T 800 400" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.5" stroke-dasharray="6,4"/>
-
-    <!-- Tributaries -->
-    <path d="M 220 0 Q 280 120, 320 210" fill="none" stroke="url(#riverGrad)" stroke-width="12" stroke-linecap="round" opacity="0.8"/>
-    <path d="M 680 500 Q 610 380, 520 280" fill="none" stroke="url(#riverGrad)" stroke-width="16" stroke-linecap="round" opacity="0.8"/>
-
-    <!-- Main River Channel Body with Glow -->
-    <path d="M -20 260 C 120 220, 180 340, 320 210 C 440 80, 520 380, 640 240 C 720 150, 760 220, 820 190"
-          fill="none" stroke="${filterColor}" stroke-width="48" opacity="0.2" filter="url(#waterGlow)"/>
-    
-    <path d="M -20 260 C 120 220, 180 340, 320 210 C 440 80, 520 380, 640 240 C 720 150, 760 220, 820 190"
-          fill="none" stroke="url(#riverGrad)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
-
-    <!-- River Centerline Flow -->
-    <path d="M -20 260 C 120 220, 180 340, 320 210 C 440 80, 520 380, 640 240 C 720 150, 760 220, 820 190"
-          fill="none" stroke="#ffffff" stroke-width="3" stroke-dasharray="14,14" opacity="0.6"/>
-
-    <!-- Satellite Overlay Reticle & Metadata HUD -->
-    <rect x="20" y="20" width="280" height="75" rx="8" fill="rgba(15,23,42,0.85)" stroke="rgba(255,255,255,0.15)"/>
-    <text x="35" y="44" fill="#38bdf8" font-family="monospace" font-size="13" font-weight="bold">SATELLITE OBSERVATION</text>
-    <text x="35" y="62" fill="#ffffff" font-family="sans-serif" font-size="14" font-weight="600">${riverQuery} BASIN</text>
-    <text x="35" y="80" fill="#94a3b8" font-family="monospace" font-size="11">DATE: ${dateStr} | RES: 10m L2A</text>
-
-    <!-- Spectrum Mode Badge -->
-    <rect x="520" y="20" width="260" height="36" rx="6" fill="rgba(15,23,42,0.85)" stroke="${filterColor}" stroke-width="1.5"/>
-    <circle cx="538" cy="38" r="5" fill="${filterColor}"/>
-    <text x="552" y="43" fill="#ffffff" font-family="monospace" font-size="11" font-weight="bold">${modeTitle}</text>
-
-    <!-- Bottom Telemetry Bar -->
-    <rect x="20" y="445" width="760" height="35" rx="6" fill="rgba(15,23,42,0.85)" stroke="rgba(255,255,255,0.1)"/>
-    <text x="35" y="467" fill="#67e8f9" font-family="monospace" font-size="11">SENSOR: Sentinel-2B MSI (BOA Reflectance)</text>
-    <text x="500" y="467" fill="#94a3b8" font-family="monospace" font-size="11">COPERNICUS DATA SPACE ECOSYSTEM</text>
+    <rect width="800" height="500" fill="#0f172a"/>
+    <circle cx="400" cy="190" r="60" fill="none" stroke="#334155" stroke-width="2" stroke-dasharray="6,6"/>
+    <path d="M 370 190 a 30 30 0 1 1 60 0" fill="none" stroke="#38bdf8" stroke-width="3"/>
+    <path d="M 400 160 l 0 -30 M 400 220 l 0 30 M 370 190 l -30 0 M 430 190 l 30 0" stroke="#38bdf8" stroke-width="3"/>
+    <text x="400" y="290" fill="#e2e8f0" font-family="sans-serif" font-size="20" font-weight="700" text-anchor="middle">NO REAL IMAGERY AVAILABLE</text>
+    <text x="400" y="316" fill="#94a3b8" font-family="monospace" font-size="13" text-anchor="middle">${riverLabel.toUpperCase()} — ${dateLabel} — ${type.toUpperCase()}</text>
+    <text x="400" y="345" fill="#64748b" font-family="sans-serif" font-size="12" text-anchor="middle">Awaiting a cloud-free Sentinel-2 pass over this water body.</text>
   </svg>
   `;
 
-  res.send(svg.trim());
+  res.send(placeholder.trim());
 });
 
 export default router;

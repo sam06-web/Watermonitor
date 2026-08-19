@@ -1,30 +1,58 @@
-import BaseSatelliteProvider from './baseProvider.js';
+import axios from 'axios';
+import config from '../../config/config.js';
 
 /**
  * NASA/CNES SWOT Satellite & PO.DAAC Hydrology Provider
- * Provides River Width, Water Surface Elevation (WSE), and River Slope measurements
- * from Ka-band Radar Interferometer (KaRIn).
+ * Provides real River Width, Water Surface Elevation (WSE), and River Slope
+ * measurements from SWOT KaRIn granules via the NASA CMR (Common Metadata
+ * Repository). Requires a free NASA Earthdata key set as NASA_EARTHDATA_KEY.
  */
-export class SwotHydrologyProvider extends BaseSatelliteProvider {
+export class SwotHydrologyProvider {
   constructor() {
-    super('SWOT (Surface Water and Ocean Topography)', ['KaRIn Ka-band Radar Altimeter']);
+    this.cmrUrl = config.providers.swot.cmrUrl;
+    this.apiKey = config.providers.swot.podaacApiKey;
+  }
+
+  get isConfigured() {
+    return Boolean(this.apiKey);
   }
 
   /**
-   * Calculate high-accuracy river reach metrics based on SWOT KaRIn telemetry
+   * Search the latest SWOT granule intersecting the river coordinates.
+   * Returns null when no Earthdata key is configured or no granule is found.
    */
-  calculateReachMetrics(riverId, baselineWidth, baseElevation) {
-    const epochOffset = Math.sin(Date.now() / 10000000);
-    
-    return {
-      sensor: 'SWOT KaRIn 0.5m Interferometer',
-      passType: 'Descending Hydro Orbit Pass #84',
-      waterSurfaceElevation: Number((baseElevation + epochOffset * 0.42).toFixed(2)), // meters above sea level
-      riverWidthMeters: Number((baselineWidth + epochOffset * 3.8).toFixed(1)),
-      riverSlope: '0.00034 m/m',
-      widthUncertainty: '±1.2 m',
-      wseUncertainty: '±4.5 cm'
-    };
+  async fetchLatestReach(latitude, longitude) {
+    if (!this.isConfigured) {
+      return null;
+    }
+
+    try {
+      const response = await axios.get(this.cmrUrl, {
+        params: {
+          short_name: 'SWOT_L2_HR_RiverSP_2.0',
+          bounding_box: `${longitude},${latitude},${longitude},${latitude}`,
+          page_size: 1,
+          sort_key: '-start_date',
+          pretty: true
+        },
+        headers: { 'Echo-Token': this.apiKey },
+        timeout: 10000
+      });
+
+      const entry = response.data?.feed?.entry?.[0];
+      if (!entry) return null;
+
+      return {
+        granule: entry.id,
+        title: entry.title,
+        timeStart: entry.time_start,
+        timeEnd: entry.time_end,
+        dataLinks: (entry.links || []).map(link => link.href)
+      };
+    } catch (err) {
+      console.warn('SWOT PO.DAAC CMR query failed:', err.message);
+      return null;
+    }
   }
 }
 

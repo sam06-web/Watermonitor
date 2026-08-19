@@ -75,8 +75,35 @@ export function initDatabase() {
   `);
 
   seedDefaultRivers();
-  seedHistoricalObservations();
-  console.log('✅ SQLite Database initialized and seeded successfully at', config.dbPath);
+  purgeSyntheticObservations();
+  dedupeObservations();
+  console.log('✅ SQLite Database initialized successfully at', config.dbPath);
+}
+
+// Remove any observations that were not produced by the real Sentinel-2
+// processor (rows inserted by the old synthetic seeder lack the source marker).
+function purgeSyntheticObservations() {
+  const removed = db.prepare(`
+    DELETE FROM satellite_observations
+    WHERE raw_metadata IS NULL OR raw_metadata NOT LIKE '%"source":"real"%'
+  `).run();
+  if (removed.changes > 0) {
+    console.log(`🧹 Purged ${removed.changes} synthetic satellite observations.`);
+  }
+}
+
+// Collapse duplicate scenes: keep only the newest row per (river, image_date, satellite).
+function dedupeObservations() {
+  const removed = db.prepare(`
+    DELETE FROM satellite_observations
+    WHERE id NOT IN (
+      SELECT MAX(id) FROM satellite_observations
+      GROUP BY river_id, image_date, satellite_name
+    )
+  `).run();
+  if (removed.changes > 0) {
+    console.log(`🧹 Deduplicated ${removed.changes} repeated satellite observations.`);
+  }
 }
 
 // Seed key rivers with exact coordinates and bounding boxes
@@ -241,164 +268,6 @@ function seedDefaultRivers() {
   insertMany(defaultRivers);
 }
 
-// Seed realistic, temporally coherent multi-epoch satellite observations
-function seedHistoricalObservations() {
-  const count = db.prepare('SELECT count(*) as count FROM satellite_observations').get().count;
-  if (count > 0) return;
-
-  const insert = db.prepare(`
-    INSERT INTO satellite_observations (
-      river_id, river_name, latitude, longitude, bbox, satellite_name, sensor,
-      image_date, image_timestamp, cloud_cover, resolution, ndwi, ndvi,
-      water_area, river_width, temperature, turbidity, flood_status, flood_risk_pct,
-      water_level, health_score, water_availability, pollution_risk,
-      ai_summary, ai_recommendation, image_url, ndwi_image_url, false_color_image_url, prev_image_url, raw_metadata
-    ) VALUES (
-      @river_id, @river_name, @latitude, @longitude, @bbox, @satellite_name, @sensor,
-      @image_date, @image_timestamp, @cloud_cover, @resolution, @ndwi, @ndvi,
-      @water_area, @river_width, @temperature, @turbidity, @flood_status, @flood_risk_pct,
-      @water_level, @health_score, @water_availability, @pollution_risk,
-      @ai_summary, @ai_recommendation, @image_url, @ndwi_image_url, @false_color_image_url, @prev_image_url, @raw_metadata
-    )
-  `);
-
-  const rivers = db.prepare('SELECT * FROM rivers').all();
-  const today = new Date();
-
-  // Baseline calibration per river
-  const riverBaselines = {
-    cauvery: { width: 145, area: 92.4, temp: 26.8, turbidity: 13.5, ndwi: 0.54, ndvi: 0.62, level: 742.8 },
-    bhavani: { width: 78, area: 38.6, temp: 24.2, turbidity: 8.4, ndwi: 0.61, ndvi: 0.74, level: 295.4 },
-    noyyal: { width: 42, area: 18.2, temp: 28.5, turbidity: 22.8, ndwi: 0.38, ndvi: 0.48, level: 368.2 },
-    amaravathi: { width: 68, area: 29.5, temp: 27.1, turbidity: 11.2, ndwi: 0.49, ndvi: 0.58, level: 312.0 },
-    ganga: { width: 480, area: 380.0, temp: 25.4, turbidity: 28.6, ndwi: 0.68, ndvi: 0.52, level: 68.4 },
-    yamuna: { width: 220, area: 145.0, temp: 29.2, turbidity: 34.1, ndwi: 0.42, ndvi: 0.44, level: 198.5 },
-    godavari: { width: 340, area: 260.0, temp: 27.8, turbidity: 18.5, ndwi: 0.59, ndvi: 0.56, level: 14.2 }
-  };
-
-  const satelliteFleet = [
-    { name: 'Sentinel-2B MSI', sensor: 'MSI Level-2A (BOA Reflectance)', res: '10m Multispectral' },
-    { name: 'Sentinel-2A MSI', sensor: 'MSI Level-2A (BOA Reflectance)', res: '10m Multispectral' },
-    { name: 'Landsat-9 OLI-2', sensor: 'OLI-2/TIRS-2 Collection 2 Tier 1', res: '15m Pan / 30m Multi' },
-    { name: 'Landsat-8 OLI', sensor: 'OLI/TIRS Collection 2 Tier 1', res: '15m Pan / 30m Multi' },
-    { name: 'SWOT KaRIn', sensor: 'Ka-band Radar Interferometer', res: '0.5m Elevation / 10m Vector' },
-    { name: 'Sentinel-3A OLCI', sensor: 'Ocean and Land Colour Instrument', res: '300m Full Res' }
-  ];
-
-  // Generate 45 historical timestamps covering 1 year
-  const daysAgoList = [
-    0, 2, 5, 8, 12, 16, 21, 26, 30, 37, 45, 53, 62, 75, 90, 105, 120, 140, 160, 180,
-    205, 230, 260, 290, 320, 350, 365
-  ];
-
-  const insertObservations = db.transaction(() => {
-    for (const river of rivers) {
-      const base = riverBaselines[river.id] || { width: 80, area: 40, temp: 26, turbidity: 15, ndwi: 0.5, ndvi: 0.55, level: 250 };
-
-      for (let i = 0; i < daysAgoList.length; i++) {
-        const daysAgo = daysAgoList[i];
-        const obsDate = new Date(today);
-        obsDate.setDate(obsDate.getDate() - daysAgo);
-
-        // Seasonal variation simulation (monsoon vs dry season)
-        const dayOfYear = Math.floor((obsDate - new Date(obsDate.getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
-        const seasonalFactor = Math.sin((dayOfYear - 150) * (2 * Math.PI / 365)) * 0.18; // peak around monsoon
-        const variance = (Math.sin(i * 1.7) * 0.05);
-
-        const currentArea = Number((base.area * (1 + seasonalFactor + variance)).toFixed(2));
-        const currentWidth = Number((base.width * (1 + seasonalFactor * 0.7 + variance * 0.5)).toFixed(1));
-        const currentNdwi = Number(Math.max(-0.2, Math.min(0.85, base.ndwi + seasonalFactor * 0.4 + variance * 0.2)).toFixed(3));
-        const currentNdvi = Number(Math.max(0.1, Math.min(0.9, base.ndvi + seasonalFactor * 0.3 - variance * 0.1)).toFixed(3));
-        const currentTemp = Number((base.temp - seasonalFactor * 4 + Math.cos(i) * 1.2).toFixed(1));
-        const currentTurbidity = Number(Math.max(3.0, (base.turbidity * (1 + Math.abs(seasonalFactor) * 1.4 + (i % 3 === 0 ? 0.3 : -0.1))).toFixed(1)));
-        const cloudCover = Number((Math.abs(Math.sin(i * 2.3 + dayOfYear * 0.05)) * 18.5).toFixed(1));
-        const waterLevel = Number((base.level + seasonalFactor * 3.5 + (Math.sin(i) * 0.8)).toFixed(2));
-
-        // Flood Risk & Health Scoring
-        let floodRiskPct = Math.round(Math.max(5, Math.min(95, 15 + seasonalFactor * 80 + (currentTurbidity > 25 ? 15 : 0))));
-        let floodStatus = 'Low';
-        if (floodRiskPct > 70) floodStatus = 'Critical';
-        else if (floodRiskPct > 45) floodStatus = 'Moderate';
-
-        let healthScore = Math.round(Math.max(30, Math.min(98, 92 - (currentTurbidity > 20 ? 18 : 0) - (river.id === 'noyyal' ? 14 : 0) - (cloudCover > 50 ? 5 : 0))));
-        
-        let waterAvailability = 'Stable';
-        if (seasonalFactor > 0.1) waterAvailability = 'Abundant';
-        else if (seasonalFactor < -0.1) waterAvailability = 'Moderate';
-
-        let pollutionRisk = 'Low';
-        if (currentTurbidity > 30 || river.id === 'noyyal') pollutionRisk = currentTurbidity > 35 ? 'Elevated' : 'Moderate';
-
-        const sat = satelliteFleet[i % satelliteFleet.length];
-        const dateStr = obsDate.toISOString().split('T')[0];
-        const timestampStr = `${dateStr}T10:42:15.000Z`;
-
-        const aiSummary = `Spectral analysis via ${sat.name} shows ${currentArea} km² water surface area (NDWI: ${currentNdwi > 0 ? '+' : ''}${currentNdwi}). Riparian vegetative buffer index (NDVI) is at ${currentNdvi}. Turbidity is ${currentTurbidity} NTU with surface temperature at ${currentTemp}°C. River width measured at ${currentWidth}m across the primary monitoring reach.`;
-        
-        let aiRecommendation = 'Continue regular satellite monitoring. Hydrological and surface reflectance metrics remain within normal seasonal parameters.';
-        if (floodStatus === 'Moderate' || floodStatus === 'Critical') {
-          aiRecommendation = 'Elevated catchment inflow detected. Increase automated satellite pass cadence and coordinate with local flood telemetry gates.';
-        } else if (pollutionRisk === 'Moderate' || pollutionRisk === 'Elevated') {
-          aiRecommendation = 'Turbidity and spectral reflectance indicate upstream suspended particulate loads. Inspect industrial outlet sensors and agricultural runoff buffer.';
-        }
-
-        // Real high-resolution imagery links and multi-band representations
-        const rgbImg = `/api/satellite/image?river=${river.id}&type=rgb&date=${dateStr}`;
-        const ndwiImg = `/api/satellite/image?river=${river.id}&type=ndwi&date=${dateStr}`;
-        const falseColorImg = `/api/satellite/image?river=${river.id}&type=false_color&date=${dateStr}`;
-        const prevDate = new Date(obsDate);
-        prevDate.setDate(prevDate.getDate() - 15);
-        const prevImg = `/api/satellite/image?river=${river.id}&type=rgb&date=${prevDate.toISOString().split('T')[0]}`;
-
-        insert.run({
-          river_id: river.id,
-          river_name: river.name,
-          latitude: river.latitude,
-          longitude: river.longitude,
-          bbox: river.bbox,
-          satellite_name: sat.name,
-          sensor: sat.sensor,
-          image_date: dateStr,
-          image_timestamp: timestampStr,
-          cloud_cover: cloudCover,
-          resolution: sat.res,
-          ndwi: currentNdwi,
-          ndvi: currentNdvi,
-          water_area: currentArea,
-          river_width: currentWidth,
-          temperature: currentTemp,
-          turbidity: currentTurbidity,
-          flood_status: floodStatus,
-          flood_risk_pct: floodRiskPct,
-          water_level: waterLevel,
-          health_score: healthScore,
-          water_availability: waterAvailability,
-          pollution_risk: pollutionRisk,
-          ai_summary: aiSummary,
-          ai_recommendation: aiRecommendation,
-          image_url: rgbImg,
-          ndwi_image_url: ndwiImg,
-          false_color_image_url: falseColorImg,
-          prev_image_url: prevImg,
-          raw_metadata: JSON.stringify({
-            platform: sat.name.split(' ')[0],
-            orbit: 120 + (i * 17) % 143,
-            sunElevation: Number((58.4 - Math.sin(i) * 12).toFixed(1)),
-            solarAzimuth: 138.2,
-            processingLevel: sat.sensor.includes('Level-2A') ? 'L2A BOA' : 'Collection-2 L2',
-            crs: 'EPSG:4326 / WGS84',
-            tileId: `T43${String.fromCharCode(65 + (i % 6))}NM`
-          })
-        });
-      }
-    }
-  });
-
-  insertObservations();
-  console.log('✅ Seeded historical satellite observations across 7 major river systems.');
-}
-
-// Database helper functions
 export const RiverDB = {
   getAllRivers() {
     return db.prepare('SELECT * FROM rivers ORDER BY name ASC').all();
@@ -442,6 +311,30 @@ export const RiverDB = {
       ORDER BY image_date DESC, id DESC 
       LIMIT 1
     `).get(riverId);
+  },
+
+  getObservationByScene(riverId, imageDate, satelliteName) {
+    return db.prepare(`
+      SELECT * FROM satellite_observations
+      WHERE river_id = ? AND image_date = ? AND satellite_name = ?
+      LIMIT 1
+    `).get(riverId, imageDate, satelliteName || '');
+  },
+
+  updateObservation(row) {
+    return db.prepare(`
+      UPDATE satellite_observations SET
+        temperature = @temperature,
+        flood_status = @flood_status,
+        flood_risk_pct = @flood_risk_pct,
+        health_score = @health_score,
+        water_availability = @water_availability,
+        pollution_risk = @pollution_risk,
+        ai_summary = @ai_summary,
+        ai_recommendation = @ai_recommendation,
+        raw_metadata = @raw_metadata
+      WHERE id = @id
+    `).run(row);
   },
 
   getHistory(riverId, limitDays = 30) {

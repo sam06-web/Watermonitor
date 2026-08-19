@@ -12,9 +12,17 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 export const config = {
   port: process.env.PORT || 5050,
   nodeEnv: process.env.NODE_ENV || 'development',
+  ml: {
+    url: process.env.WATER_QUALITY_MODEL_URL || 'http://127.0.0.1:5001'
+  },
   
   // Database Configuration
   dbPath: process.env.DATABASE_PATH || path.resolve(__dirname, '../db/satellite.db'),
+
+  // Real satellite imagery cache (PNG files rendered from Sentinel-2 COGs)
+  satellite: {
+    imageCacheDir: process.env.SATELLITE_IMAGE_CACHE_DIR || path.resolve(__dirname, '../cache/satellite')
+  },
 
   // Satellite Provider Credentials (Flexible & Modular - None hardcoded)
   providers: {
@@ -49,6 +57,7 @@ export const config = {
     // SWOT Hydrology & NASA PO.DAAC
     swot: {
       podaacApiKey: process.env.NASA_EARTHDATA_KEY || '',
+      token: process.env.NASA_EARTHDATA_TOKEN || '',
       cmrUrl: 'https://cmr.earthdata.nasa.gov/search/granules.json'
     },
 

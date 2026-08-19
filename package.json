@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -n \"SERVER,CLIENT\" -c \"cyan,blue\" \"node server/index.js\" \"vite --host\"",
+    "dev:hybrid": "concurrently -n \"ML,SERVER,CLIENT\" -c \"magenta,cyan,blue\" \"python3 ml/app.py\" \"node server/index.js\" \"vite --host\"",
     "client": "vite --host",
     "server": "node server/index.js",
+    "ml": "python3 ml/app.py",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

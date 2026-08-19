@@ -19,9 +19,21 @@ const SPECTRUM_MODES = [
   { id: 'moisture', label: 'Moisture Index (NDMI)', desc: 'Bands 8, 11 - Soil Wetness' }
 ];
 
-export default function SatelliteMonitoring({ onShowToast }) {
+const formatUtcDate = value => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Date unavailable';
+  return date.toLocaleDateString('en-CA', { timeZone: 'UTC' });
+};
+
+const formatUtcTime = value => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Time unavailable';
+  return `${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' })} UTC`;
+};
+
+export default function SatelliteMonitoring({ onShowToast, selectedWaterBodyId = 'cauvery', onWaterBodyChange }) {
   // River Search & Selection State
-  const [selectedRiverId, setSelectedRiverId] = useState('cauvery');
+  const [selectedRiverId, setSelectedRiverId] = useState(selectedWaterBodyId);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -52,19 +64,32 @@ export default function SatelliteMonitoring({ onShowToast }) {
   const mapInstanceRef = useRef(null);
   const searchInputRef = useRef(null);
   const compareContainerRef = useRef(null);
+  const loadRequestRef = useRef(0);
+  const historyRequestRef = useRef(0);
 
   // 1. Fetch River & Observation Data
   const loadRiverData = async (riverId, showToastMsg = false) => {
+    const requestId = ++loadRequestRef.current;
     setIsLoading(true);
+    setObservation(null);
+    setStatistics(null);
+    setHistoryData([]);
+    setViewerZoom(1);
+    setIsComparing(false);
     try {
       // Fetch latest observation
       const res = await fetch(`/api/satellite/latest?river=${riverId}`);
       const data = await res.json();
 
-      if (data.success) {
+      if (!data.success) {
+        throw new Error(data.error || 'Unable to load the selected water body');
+      }
+
+      if (requestId === loadRequestRef.current) {
         setRiverData(data.river);
         setObservation(data.observation);
         setSelectedRiverId(data.river.id);
+        onWaterBodyChange?.(data.river.id);
 
         if (showToastMsg && onShowToast) {
           onShowToast({
@@ -75,15 +100,11 @@ export default function SatelliteMonitoring({ onShowToast }) {
         }
       }
 
-      // Fetch statistics
-      const statsRes = await fetch(`/api/satellite/statistics?river=${riverId}`);
+      const statsRes = await fetch(`/api/satellite/statistics?river=${data.river.id}`);
       const statsData = await statsRes.json();
-      if (statsData.success) {
+      if (statsData.success && requestId === loadRequestRef.current) {
         setStatistics(statsData.statistics);
       }
-
-      // Fetch history
-      await loadHistory(riverId, historyPeriod);
     } catch (err) {
       console.error('Failed to load river data:', err);
       if (onShowToast) {
@@ -94,16 +115,18 @@ export default function SatelliteMonitoring({ onShowToast }) {
         });
       }
     } finally {
+      if (requestId !== loadRequestRef.current) return;
       setIsLoading(false);
     }
   };
 
   // 2. Fetch Historical Remote Sensing Telemetry
   const loadHistory = async (riverId, period) => {
+    const requestId = ++historyRequestRef.current;
     try {
       const res = await fetch(`/api/satellite/history?river=${riverId}&period=${period}`);
       const data = await res.json();
-      if (data.success) {
+      if (data.success && requestId === historyRequestRef.current) {
         setHistoryData(data.history || []);
       }
     } catch (err) {
@@ -116,12 +139,26 @@ export default function SatelliteMonitoring({ onShowToast }) {
     loadRiverData(selectedRiverId);
   }, []);
 
-  // Update history when period changes
+  // Update history only after the active water body is confirmed by its latest observation.
   useEffect(() => {
-    if (selectedRiverId) {
-      loadHistory(selectedRiverId, historyPeriod);
+    if (riverData?.id) {
+      loadHistory(riverData.id, historyPeriod);
     }
-  }, [historyPeriod, selectedRiverId]);
+  }, [historyPeriod, riverData?.id]);
+
+  const getImageUrl = (type, date, variant = 'latest') => {
+    const riverId = riverData?.id || 'cauvery';
+    const imageDate = date || observation?.imageDate || '';
+    const scene = observation?.id || imageDate || 'current';
+    return `/api/satellite/image?river=${encodeURIComponent(riverId)}&type=${encodeURIComponent(type)}&date=${encodeURIComponent(imageDate)}&scene=${encodeURIComponent(`${scene}-${variant}`)}`;
+  };
+
+  const getPreviousImageDate = () => {
+    if (!observation?.imageDate) return '';
+    const previousDate = new Date(observation.imageDate);
+    previousDate.setDate(previousDate.getDate() - 15);
+    return previousDate.toISOString().split('T')[0];
+  };
 
   // 3. Search River Autocomplete with Debounce
   useEffect(() => {
@@ -182,22 +219,57 @@ export default function SatelliteMonitoring({ onShowToast }) {
               type: 'raster',
               source: 'esri-satellite',
               minzoom: 0,
-              maxzoom: 19
+              maxzoom: 19,
+              layout: { visibility: 'visible' }
+            },
+            {
+              id: 'dark-base',
+              type: 'raster',
+              source: 'carto-dark',
+              minzoom: 0,
+              maxzoom: 19,
+              layout: { visibility: 'none' }
             }
           ]
         },
         center: [78.583, 11.137], // Cauvery initial
         zoom: 7.5,
         pitch: 25,
-        bearing: 0
+        bearing: 0,
+        attributionControl: false
       });
 
       map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
       map.addControl(new maplibregl.FullscreenControl(), 'top-right');
+      map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: '' }), 'bottom-right');
 
       mapInstanceRef.current = map;
+
+      if (mapLayer === 'ndwi') {
+        map.setLayoutProperty('satellite-base', 'visibility', 'none');
+        map.setLayoutProperty('dark-base', 'visibility', 'visible');
+      }
     }
   }, []);
+
+  const applyMapLayerMode = (mode) => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const isNdwi = mode === 'ndwi';
+    map.setLayoutProperty('satellite-base', 'visibility', isNdwi ? 'none' : 'visible');
+    map.setLayoutProperty('dark-base', 'visibility', isNdwi ? 'visible' : 'none');
+
+    map.setPaintProperty('river-glow', 'line-color', isNdwi ? '#00f0ff' : '#38bdf8');
+    map.setPaintProperty('river-glow', 'line-width', isNdwi ? 18 : 14);
+    map.setPaintProperty('river-glow', 'line-opacity', isNdwi ? 0.75 : 0.4);
+
+    map.setPaintProperty('river-core', 'line-color', isNdwi ? '#7dd3fc' : '#38bdf8');
+    map.setPaintProperty('river-core', 'line-width', isNdwi ? 8 : 6);
+
+    map.setPaintProperty('river-pulse', 'line-color', isNdwi ? '#f0f9ff' : '#ffffff');
+    map.setPaintProperty('river-pulse', 'line-width', isNdwi ? 3 : 2);
+  };
 
   // 5. Update Map Layers & GeoJSON Vector Highlights when River Changes
   useEffect(() => {
@@ -205,6 +277,10 @@ export default function SatelliteMonitoring({ onShowToast }) {
     if (!map || !riverData) return;
 
     const onMapLoaded = () => {
+      // The satellite view can be opened after the page layout changes; resize
+      // before focusing so MapLibre uses the current container dimensions.
+      map.resize();
+
       // Update River Vector Source
       const geojsonSource = map.getSource('river-vector');
       const riverGeojson = {
@@ -278,30 +354,31 @@ export default function SatelliteMonitoring({ onShowToast }) {
         });
       }
 
-      // Fly and Fit to River Bounding Box
-      if (riverData.bbox && Array.isArray(riverData.bbox) && riverData.bbox.length === 4) {
-        map.fitBounds(
-          [
-            [riverData.bbox[0], riverData.bbox[1]],
-            [riverData.bbox[2], riverData.bbox[3]]
-          ],
-          {
-            padding: { top: 60, bottom: 60, left: 60, right: 60 },
-            duration: 1800,
-            pitch: 35
-          }
-        );
-      } else if (riverData.longitude && riverData.latitude) {
-        map.flyTo({
-          center: [riverData.longitude, riverData.latitude],
-          zoom: 9.5,
-          duration: 1800,
-          pitch: 35
-        });
-      }
+      // Focus the map on the searched river/lake. OSM results provide a bbox;
+      // point-only water bodies fall back to their coordinates.
+      const bbox = Array.isArray(riverData.bbox) ? riverData.bbox.map(Number) : [];
+      const hasValidBounds = bbox.length === 4 && bbox.every(Number.isFinite) && bbox[0] < bbox[2] && bbox[1] < bbox[3];
+      const latitude = Number(riverData.latitude);
+      const longitude = Number(riverData.longitude);
+
+      requestAnimationFrame(() => {
+        if (hasValidBounds) {
+          map.fitBounds(
+            [[bbox[0], bbox[1]], [bbox[2], bbox[3]]],
+            {
+              padding: { top: 80, bottom: 80, left: 80, right: 80 },
+              maxZoom: 13,
+              duration: 1800,
+              pitch: 35
+            }
+          );
+        } else if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+          map.flyTo({ center: [longitude, latitude], zoom: 11, duration: 1800, pitch: 35 });
+        }
+      });
     };
 
-    if (map.loaded()) {
+    if (map.isStyleLoaded()) {
       onMapLoaded();
     } else {
       map.once('load', onMapLoaded);
@@ -343,7 +420,24 @@ export default function SatelliteMonitoring({ onShowToast }) {
     }
   };
 
-  // 7. Handle Image Comparison Slider Drag
+  // 7. AI-display helpers derived directly from the measured indices
+  const healthGrade = observation
+    ? observation.healthScore >= 85 ? 'Excellent' : observation.healthScore >= 70 ? 'Good' : observation.healthScore >= 50 ? 'Fair' : 'Poor'
+    : '—';
+  const healthGradeColor = observation
+    ? observation.healthScore >= 85 ? 'var(--success-green)' : observation.healthScore >= 70 ? 'var(--accent-cyan)' : observation.healthScore >= 50 ? 'var(--warning-amber)' : 'var(--danger-red)'
+    : 'var(--text-muted)';
+  const ndviValue = Number(observation?.ndvi);
+  const ndviLabel = !Number.isFinite(ndviValue)
+    ? '—'
+    : ndviValue < 0 ? 'Water / Barren'
+    : ndviValue < 0.2 ? 'Sparse / Degraded'
+    : ndviValue < 0.4 ? 'Moderate'
+    : ndviValue < 0.6 ? 'Dense'
+    : 'Very Dense';
+  const ndviDisplay = Number.isFinite(ndviValue) ? `NDVI ${ndviValue >= 0 ? '+' : ''}${ndviValue.toFixed(3)}` : 'NDVI —';
+
+  // 8. Handle Image Comparison Slider Drag
   const handleSliderMove = (e) => {
     if (!compareContainerRef.current) return;
     const rect = compareContainerRef.current.getBoundingClientRect();
@@ -357,7 +451,7 @@ export default function SatelliteMonitoring({ onShowToast }) {
   // 8. Download Satellite Image & Telemetry Metadata Report
   const handleDownloadImage = () => {
     if (!riverData || !observation) return;
-    const imageUrl = `/api/satellite/image?river=${riverData.id}&type=${spectrumMode}&date=${observation.imageDate}`;
+    const imageUrl = getImageUrl(spectrumMode, observation.imageDate);
 
     fetch(imageUrl)
       .then(res => res.blob())
@@ -365,7 +459,7 @@ export default function SatelliteMonitoring({ onShowToast }) {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `AquaSense_${riverData.id}_${spectrumMode}_${observation.imageDate}.svg`;
+        a.download = `AquaSense_${riverData.id}_${spectrumMode}_${observation.imageDate}.png`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -393,7 +487,7 @@ export default function SatelliteMonitoring({ onShowToast }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <span className="sat-live-indicator pulse"></span>
               <h1 className="page-title" style={{ margin: 0, fontSize: '1.75rem' }}>
-                Satellite River Monitoring
+                Satellite Water-body Monitoring
               </h1>
             </div>
             <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>
@@ -438,27 +532,8 @@ export default function SatelliteMonitoring({ onShowToast }) {
           </div>
         </div>
 
-        {/* River Quick Selector Chips & Autocomplete Search */}
+        {/* River Search & Autocomplete */}
         <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          {/* Quick River Chips */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.825rem', color: 'var(--text-muted)', fontWeight: '600' }}>MONITOR RIVER:</span>
-            {DEFAULT_RIVERS.slice(0, 4).map(r => (
-              <button
-                key={r.id}
-                onClick={() => {
-                  setSelectedRiverId(r.id);
-                  setSearchQuery('');
-                  setShowDropdown(false);
-                  loadRiverData(r.id, true);
-                }}
-                className={`sat-chip ${selectedRiverId === r.id ? 'active' : ''}`}
-              >
-                💧 {r.name}
-              </button>
-            ))}
-          </div>
-
           {/* Search Box Input */}
           <div style={{ position: 'relative', width: '100%', maxWidth: '600px' }}>
             <div className="sat-search-input-wrapper">
@@ -470,7 +545,7 @@ export default function SatelliteMonitoring({ onShowToast }) {
                 ref={searchInputRef}
                 type="text"
                 className="sat-search-input"
-                placeholder="Search any river (e.g., Cauvery, Bhavani, Ganga, Godavari, Amazon...)"
+                placeholder="Search any river or lake worldwide (e.g., Amazon, Lake Victoria, Ganga...)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => { if (searchResults.length > 0) setShowDropdown(true); }}
@@ -502,7 +577,7 @@ export default function SatelliteMonitoring({ onShowToast }) {
                   >
                     <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{river.name}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      {river.state ? `${river.state} • ` : ''}{river.basin || 'River Basin'}
+                      {river.waterType === 'lake' ? 'Lake / reservoir' : 'River / waterway'}{river.state ? ` • ${river.state}` : ''}
                     </div>
                   </div>
                 ))}
@@ -526,12 +601,12 @@ export default function SatelliteMonitoring({ onShowToast }) {
             </div>
 
             <div className="sat-obs-item">
-              <div className="sat-obs-icon">📅</div>
+              <div className="sat-obs-icon"></div>
               <div>
                 <div className="sat-obs-label">Acquisition Date</div>
-                <div className="sat-obs-value">{observation.imageDate}</div>
+                <div className="sat-obs-value">{formatUtcDate(observation.imageTimestamp || observation.imageDate)}</div>
                 <div className="sat-obs-sub">
-                  {new Date(observation.imageTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} UTC
+                  {formatUtcTime(observation.imageTimestamp || observation.imageDate)}
                 </div>
               </div>
             </div>
@@ -582,9 +657,7 @@ export default function SatelliteMonitoring({ onShowToast }) {
               className={`sat-map-btn ${mapLayer === 'satellite' ? 'active' : ''}`}
               onClick={() => {
                 setMapLayer('satellite');
-                if (mapInstanceRef.current?.setLayoutProperty) {
-                  mapInstanceRef.current.setLayoutProperty('satellite-base', 'visibility', 'visible');
-                }
+                applyMapLayerMode('satellite');
               }}
             >
               🛰️ High-Res Satellite
@@ -593,10 +666,7 @@ export default function SatelliteMonitoring({ onShowToast }) {
               className={`sat-map-btn ${mapLayer === 'ndwi' ? 'active' : ''}`}
               onClick={() => {
                 setMapLayer('ndwi');
-                if (mapInstanceRef.current?.setPaintProperty) {
-                  mapInstanceRef.current.setPaintProperty('river-glow', 'line-color', '#00f0ff');
-                  mapInstanceRef.current.setPaintProperty('river-glow', 'line-width', 22);
-                }
+                applyMapLayerMode('ndwi');
               }}
             >
               🌊 Water Mask (NDWI)
@@ -733,7 +803,7 @@ export default function SatelliteMonitoring({ onShowToast }) {
                 <div className="metric-icon" style={{ color: '#8b5cf6' }}>📈</div>
               </div>
               <div className="metric-value">
-                {observation.waterLevelMeters || '295.4'} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>m ASL</span>
+                {observation.waterLevelMeters ?? '—'} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>m ASL</span>
               </div>
               <div className="metric-status good">
                 <span>WSE Altimetry</span>
@@ -853,7 +923,8 @@ export default function SatelliteMonitoring({ onShowToast }) {
             /* Single Image View */
             <div className="sat-image-wrapper" style={{ transform: `scale(${viewerZoom})` }}>
               <img
-                src={`/api/satellite/image?river=${riverData?.id || 'cauvery'}&type=${spectrumMode}&date=${observation?.imageDate || ''}`}
+                key={`${riverData?.id}-${observation?.id}-${spectrumMode}`}
+                src={getImageUrl(spectrumMode, observation?.imageDate)}
                 alt={`${riverData?.name} Satellite Observation`}
                 className="sat-image-render"
               />
@@ -863,7 +934,8 @@ export default function SatelliteMonitoring({ onShowToast }) {
             <div className="sat-compare-viewport" style={{ transform: `scale(${viewerZoom})` }}>
               {/* After / Latest Image (Underneath) */}
               <img
-                src={`/api/satellite/image?river=${riverData?.id || 'cauvery'}&type=rgb&date=${observation?.imageDate || ''}`}
+                key={`${riverData?.id}-${observation?.id}-latest`}
+                src={getImageUrl('rgb', observation?.imageDate, 'latest')}
                 alt="Latest Satellite Observation"
                 className="sat-compare-img sat-compare-after"
               />
@@ -874,7 +946,8 @@ export default function SatelliteMonitoring({ onShowToast }) {
               {/* Before / Previous Image (Clipped overlay) */}
               <div className="sat-compare-overlay" style={{ width: `${sliderPosition}%` }}>
                 <img
-                  src={`/api/satellite/image?river=${riverData?.id || 'cauvery'}&type=rgb&date=${observation?.prevImageUrl ? '2026-07-28' : ''}`}
+                  key={`${riverData?.id}-${observation?.id}-previous`}
+                  src={getImageUrl('rgb', getPreviousImageDate(), 'previous')}
                   alt="Previous Satellite Observation"
                   className="sat-compare-img sat-compare-before"
                 />
@@ -901,7 +974,7 @@ export default function SatelliteMonitoring({ onShowToast }) {
               <span>📈</span> Remote Sensing Historical Trend Analysis
             </h2>
             <p className="chart-subtitle">
-              Multi-epoch time-series of satellite-derived hydrological indices
+              Multi-epoch time-series for {riverData?.name || 'the selected water body'}
             </p>
           </div>
 
@@ -1082,13 +1155,13 @@ export default function SatelliteMonitoring({ onShowToast }) {
             <div className="sat-ai-score-box">
               <div className="sat-score-circle">
                 <svg viewBox="0 0 100 100" width="100" height="100">
-                  <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
+                  <circle cx="50" cy="50" r="42" fill="none" stroke="#dbe7ef" strokeWidth="8" />
                   <circle
                     cx="50"
                     cy="50"
                     r="42"
                     fill="none"
-                    stroke="#00f0ff"
+                    stroke="#0891b2"
                     strokeWidth="8"
                     strokeDasharray="264"
                     strokeDashoffset={264 - (264 * observation.healthScore) / 100}
@@ -1102,7 +1175,7 @@ export default function SatelliteMonitoring({ onShowToast }) {
                 </div>
               </div>
               <div style={{ fontWeight: '700', color: 'var(--text-primary)', marginTop: '0.5rem' }}>
-                River Health: <span style={{ color: 'var(--accent-cyan)' }}>{observation.healthScore > 80 ? 'Excellent' : observation.healthScore > 65 ? 'Good' : 'Fair'}</span>
+                River Health: <span style={{ color: healthGradeColor }}>{observation.healthScore} ({healthGrade})</span>
               </div>
             </div>
 
@@ -1117,22 +1190,22 @@ export default function SatelliteMonitoring({ onShowToast }) {
 
               <div className="sat-matrix-item">
                 <div className="sat-matrix-label">Flood Warning</div>
-                <div className="sat-matrix-val" style={{ color: observation.floodStatus === 'Low' ? 'var(--success-green)' : 'var(--warning-amber)' }}>
+                <div className="sat-matrix-val" style={{ color: observation.floodStatus === 'Low' ? 'var(--success-green)' : observation.floodStatus === 'Critical' ? 'var(--danger-red)' : 'var(--warning-amber)' }}>
                   🛡️ {observation.floodStatus === 'Low' ? 'Low Risk (Normal)' : `${observation.floodStatus} Risk`}
                 </div>
               </div>
 
               <div className="sat-matrix-item">
                 <div className="sat-matrix-label">Pollution Risk</div>
-                <div className="sat-matrix-val" style={{ color: observation.pollutionRisk === 'Low' ? 'var(--success-green)' : 'var(--warning-amber)' }}>
+                <div className="sat-matrix-val" style={{ color: observation.pollutionRisk === 'Low' ? 'var(--success-green)' : observation.pollutionRisk === 'High' ? 'var(--danger-red)' : 'var(--warning-amber)' }}>
                   🌱 {observation.pollutionRisk || 'Low'}
                 </div>
               </div>
 
               <div className="sat-matrix-item">
                 <div className="sat-matrix-label">Vegetative Riparian Health</div>
-                <div className="sat-matrix-val" style={{ color: '#22c55e' }}>
-                  🌿 NDVI +{observation.ndvi} (Dense)
+                <div className="sat-matrix-val" style={{ color: ndviValue < 0.2 ? 'var(--warning-amber)' : '#22c55e' }}>
+                  🌿 {ndviDisplay} ({ndviLabel})
                 </div>
               </div>
             </div>
@@ -1147,7 +1220,7 @@ export default function SatelliteMonitoring({ onShowToast }) {
               </p>
             </div>
 
-            <div style={{ paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
               <strong style={{ color: 'var(--warning-amber)', fontSize: '0.9rem' }}>RECOMMENDATION:</strong>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
                 {observation.aiRecommendation}

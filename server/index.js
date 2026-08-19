@@ -3,6 +3,7 @@ import cors from 'cors';
 import config from './config/config.js';
 import { initDatabase } from './db/database.js';
 import satelliteRouter from './routes/satelliteRoutes.js';
+import waterQualityRouter from './routes/waterQualityRoutes.js';
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use((req, res, next) => {
 
 // Mount Routes
 app.use('/api/satellite', satelliteRouter);
+app.use('/api/water-quality', waterQualityRouter);
 
 // System Health Check
 app.get('/api/health', (req, res) => {
