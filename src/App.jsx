@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import mqtt from 'mqtt'; // Import MQTT
 import WaterQuality from './components/WaterQuality';
 import UsageChart from './components/UsageChart';
-import AIAssistant from './components/AIAssistant';
+import FloatingChat from './components/FloatingChat';
 import PipeMap from './components/PipeMap';
 import Settings from './components/Settings'; // Import Settings
 import FlowMonitor from './components/FlowMonitor'; // Import FlowMonitor
@@ -509,6 +509,17 @@ function App() {
           />
         ))}
       </div>
+
+      {/* Floating AI Pollution Assistant */}
+      <FloatingChat
+        realTimeData={realTimeMetrics}
+        waterQuality={waterQualityMetrics}
+        satelliteObservation={satelliteObservation}
+        satelliteRiver={satelliteRiver}
+        contaminationPoints={contaminationPoints}
+        modelPrediction={modelPrediction}
+        leakThreshold={leakThreshold}
+      />
     </div>
   );
 }
