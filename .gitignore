@@ -31,3 +31,8 @@ server/db/*.db-wal
 
 # Real satellite image cache (rendered PNGs)
 server/cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*.joblib
