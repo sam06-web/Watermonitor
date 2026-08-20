@@ -16,7 +16,8 @@ export default function ImageViewer({ riverData, observation, onShowToast }) {
   const compareContainerRef = useRef(null);
 
   const getImageUrl = (type, date, variant = 'latest') => {
-    const riverId = riverData?.id || 'cauvery';
+    const riverId = riverData?.id;
+    if (!riverId) return '';
     const imageDate = date || observation?.imageDate || '';
     const scene = observation?.id || imageDate || 'current';
     return `/api/satellite/image?river=${encodeURIComponent(riverId)}&type=${encodeURIComponent(type)}&date=${encodeURIComponent(imageDate)}&scene=${encodeURIComponent(`${scene}-${variant}`)}`;

@@ -90,21 +90,20 @@ async function fetchSwotMetrics(river, token) {
 }
 
 /**
- * Helper to resolve a river from query parameter (id, name, or default)
+ * Helper to resolve a river from query parameter (id, name, or OSM search).
+ * Returns null if nothing is found — never falls back to a hardcoded default.
  */
 async function resolveRiver(req) {
-  const query = req.query.river || req.query.river_id || req.query.name || 'cauvery';
+  const query = req.query.river || req.query.river_id || req.query.name;
+  if (!query) return null;
+
   let river = await RiverDB.getRiverById(query.toLowerCase());
-  if (!river) {
-    river = await RiverDB.getRiverByName(query);
-  }
+  if (!river) river = await RiverDB.getRiverByName(query);
   if (!river) {
     const searchRes = await RiverGeoService.searchRivers(query);
-    if (searchRes.length > 0) {
-      river = searchRes[0];
-    }
+    if (searchRes.length > 0) river = searchRes[0];
   }
-  return river || await RiverDB.getRiverById('cauvery');
+  return river || null;
 }
 
 /**
@@ -261,6 +260,7 @@ router.get('/latest', async (req, res) => {
 router.get('/history', async (req, res) => {
   try {
     const river = await resolveRiver(req);
+    if (!river) return res.status(400).json({ success: false, message: 'Provide a river name or id.' });
     const periodStr = (req.query.period || '30d').toLowerCase();
 
     let limitDays = 30;
@@ -308,6 +308,7 @@ router.get('/history', async (req, res) => {
 router.get('/statistics', async (req, res) => {
   try {
     const river = await resolveRiver(req);
+    if (!river) return res.status(400).json({ success: false, message: 'Provide a river name or id.' });
     const data = await RiverDB.getStatistics(river.id);
 
     res.json({
@@ -338,6 +339,7 @@ router.get('/statistics', async (req, res) => {
 router.post('/refresh', async (req, res) => {
   try {
     const river = await resolveRiver(req);
+    if (!river) return res.status(400).json({ success: false, message: 'Provide a river name or id.' });
     const newObs = await refreshRiverObservation(river);
 
     res.json({
@@ -366,16 +368,16 @@ async function refreshRiverObservation(river) {
   }
   if (!Array.isArray(bbox) || bbox.length !== 4) {
     bbox = [
-      Number(river.longitude) - 0.3,
-      Number(river.latitude) - 0.3,
-      Number(river.longitude) + 0.3,
-      Number(river.latitude) + 0.3
+      Number(river.longitude) - 0.5,
+      Number(river.latitude) - 0.5,
+      Number(river.longitude) + 0.5,
+      Number(river.latitude) + 0.5
     ];
   }
   bbox = clampBbox(bbox, Number(river.latitude), Number(river.longitude));
 
   const end = new Date().toISOString().split('T')[0];
-  const start = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const start = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   let real;
   try {
@@ -388,7 +390,7 @@ async function refreshRiverObservation(river) {
         bbox,
         lat: Number(river.latitude),
         lng: Number(river.longitude),
-        max_cloud: 60,
+        max_cloud: 80,
         start,
         end
       }),
@@ -529,6 +531,7 @@ async function persistRealObservation(river, real, bbox, { enrichment = 'live' }
 router.post('/backfill', async (req, res) => {
   try {
     const river = await resolveRiver(req);
+    if (!river) return res.status(400).json({ success: false, message: 'Provide a river name or id.' });
     let bbox = river.bbox;
     try {
       bbox = typeof bbox === 'string' ? JSON.parse(bbox) : bbox;

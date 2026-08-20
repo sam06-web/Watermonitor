@@ -116,7 +116,7 @@ Current Satellite Metrics:
 Provide a 2-sentence remote sensing summary and a 1-sentence actionable recommendation.`;
 
       const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-        model: 'google/gemini-2.0-flash-001',
+        model: 'google/gemini-2.5-flash',
         messages: [{ role: 'user', content: prompt }]
       }, {
         headers: {

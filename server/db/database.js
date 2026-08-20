@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import config from '../config/config.js';
-import { connectMongo, getMongoDB, isMongoConfigured, mongoRiverDB } from './mongo.js';
+import { connectMongo, getMongoDB, isMongoConfigured } from './mongo.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,7 +30,6 @@ export function isMongo() {
 export async function initDatabase() {
   if (USE_MONGO) {
     await connectMongo();
-    await seedDefaultRiversMongo();
     await purgeSyntheticObservationsMongo();
     await dedupeObservationsMongo();
     const maskedUri = String(config.mongodb.uri).replace(/\/\/[^@/]+@/, '//***@');
@@ -94,7 +93,6 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_obs_river_date ON satellite_observations(river_id, image_date DESC);
   `);
 
-  seedDefaultRivers();
   purgeSyntheticObservations();
   dedupeObservations();
   console.log('✅ SQLite Database initialized successfully at', config.dbPath);
@@ -162,174 +160,6 @@ async function dedupeObservationsMongo() {
   }
 }
 
-// Seed key rivers with exact coordinates and bounding boxes
-const defaultRivers = [
-  {
-    id: 'cauvery',
-    name: 'Cauvery River',
-    alternate_names: 'Kaveri, Kaveri River, Ponni',
-    state: 'Tamil Nadu & Karnataka',
-    country: 'India',
-    latitude: 11.137,
-    longitude: 78.583,
-    bbox: JSON.stringify([75.5, 10.7, 79.9, 12.5]),
-    length_km: 805,
-    basin: 'Cauvery Basin',
-    geometry: JSON.stringify({
-      type: 'LineString',
-      coordinates: [
-        [75.525, 12.385], [75.789, 12.421], [76.012, 12.389], [76.321, 12.445],
-        [76.654, 12.418], [77.012, 12.215], [77.458, 12.089], [77.721, 11.834],
-        [77.765, 11.458], [78.125, 11.312], [78.583, 11.137], [79.124, 10.954],
-        [79.521, 11.089], [79.845, 11.145]
-      ]
-    }),
-    description: 'Sacred lifespring of South India originating at Talakaveri in the Western Ghats of Karnataka and flowing east through Tamil Nadu into the Bay of Bengal.'
-  },
-  {
-    id: 'bhavani',
-    name: 'Bhavani River',
-    alternate_names: 'Bhavani, Bhavani Aaru',
-    state: 'Tamil Nadu & Kerala',
-    country: 'India',
-    latitude: 11.448,
-    longitude: 77.142,
-    bbox: JSON.stringify([76.5, 11.1, 77.8, 11.6]),
-    length_km: 217,
-    basin: 'Cauvery Basin (Major Tributary)',
-    geometry: JSON.stringify({
-      type: 'LineString',
-      coordinates: [
-        [76.582, 11.125], [76.712, 11.234], [76.921, 11.312], [77.085, 11.398],
-        [77.142, 11.448], [77.345, 11.489], [77.589, 11.445], [77.712, 11.452]
-      ]
-    }),
-    description: 'Second longest river in Tamil Nadu, originating in the Silent Valley of Kerala and the Nilgiri hills, feeding the Bhavanisagar Dam before joining the Cauvery.'
-  },
-  {
-    id: 'noyyal',
-    name: 'Noyyal River',
-    alternate_names: 'Noyyal, Noyyal Aaru, Kanchi Maanadhi',
-    state: 'Tamil Nadu',
-    country: 'India',
-    latitude: 11.002,
-    longitude: 77.291,
-    bbox: JSON.stringify([76.7, 10.9, 77.9, 11.2]),
-    length_km: 180,
-    basin: 'Cauvery Basin (Tributary)',
-    geometry: JSON.stringify({
-      type: 'LineString',
-      coordinates: [
-        [76.715, 10.942], [76.925, 10.995], [77.125, 11.012], [77.291, 11.002],
-        [77.542, 10.985], [77.745, 11.025], [77.889, 11.054]
-      ]
-    }),
-    description: 'Historic river originating in the Velliangiri Hills of the Western Ghats, flowing through Coimbatore and Tiruppur industrial regions into the Cauvery at Kodumudi.'
-  },
-  {
-    id: 'amaravathi',
-    name: 'Amaravathi River',
-    alternate_names: 'Amaravathi, Amaravathi Aaru, Pournami',
-    state: 'Tamil Nadu & Kerala',
-    country: 'India',
-    latitude: 10.728,
-    longitude: 77.834,
-    bbox: JSON.stringify([77.1, 10.2, 78.2, 11.0]),
-    length_km: 256,
-    basin: 'Cauvery Basin (Southern Tributary)',
-    geometry: JSON.stringify({
-      type: 'LineString',
-      coordinates: [
-        [77.165, 10.245], [77.289, 10.412], [77.485, 10.589], [77.685, 10.698],
-        [77.834, 10.728], [78.012, 10.845], [78.145, 10.958]
-      ]
-    }),
-    description: 'Originates at the border of Anamalai Hills and Munnar, forming the Amaravathi Reservoir and flowing past Udumalpet, Dharapuram, and Karur before meeting the Cauvery.'
-  },
-  {
-    id: 'ganga',
-    name: 'Ganga River',
-    alternate_names: 'Ganges, Bhagirathi, Hooghly',
-    state: 'Uttarakhand, UP, Bihar, WB',
-    country: 'India',
-    latitude: 25.317,
-    longitude: 83.006,
-    bbox: JSON.stringify([78.5, 22.0, 88.5, 31.0]),
-    length_km: 2525,
-    basin: 'Ganga Basin',
-    geometry: JSON.stringify({
-      type: 'LineString',
-      coordinates: [
-        [78.598, 30.145], [78.165, 29.954], [79.458, 27.895], [80.345, 26.465],
-        [81.845, 25.435], [83.006, 25.317], [85.125, 25.612], [88.363, 22.572]
-      ]
-    }),
-    description: 'Major trans-boundary river of Asia, flowing through India and Bangladesh, with the largest basin drainage system in the subcontinent.'
-  },
-  {
-    id: 'yamuna',
-    name: 'Yamuna River',
-    alternate_names: 'Jamuna, Kalindi',
-    state: 'Uttarakhand, Haryana, Delhi, UP',
-    country: 'India',
-    latitude: 28.613,
-    longitude: 77.209,
-    bbox: JSON.stringify([77.0, 25.0, 82.0, 31.0]),
-    length_km: 1376,
-    basin: 'Ganga Basin (Major Tributary)',
-    geometry: JSON.stringify({
-      type: 'LineString',
-      coordinates: [
-        [78.452, 31.012], [77.345, 30.215], [77.209, 28.613], [77.589, 27.845],
-        [78.012, 27.185], [79.012, 26.545], [81.845, 25.435]
-      ]
-    }),
-    description: 'Longest and second-largest tributary of the Ganges in northern India, originating from the Yamunotri Glacier in the Lower Himalayas.'
-  },
-  {
-    id: 'godavari',
-    name: 'Godavari River',
-    alternate_names: 'Dakshin Ganga, Gautami',
-    state: 'Maharashtra, Telangana, Andhra Pradesh',
-    country: 'India',
-    latitude: 17.000,
-    longitude: 81.804,
-    bbox: JSON.stringify([73.5, 16.5, 82.5, 20.0]),
-    length_km: 1465,
-    basin: 'Godavari Basin',
-    geometry: JSON.stringify({
-      type: 'LineString',
-      coordinates: [
-        [73.535, 19.995], [75.315, 19.865], [77.125, 19.145], [78.789, 18.954],
-        [80.125, 18.452], [81.804, 17.000], [82.245, 16.745]
-      ]
-    }),
-    description: 'Second longest river in India after the Ganga, draining the Deccan plateau through Maharashtra and Andhra Pradesh into the Bay of Bengal.'
-  }
-];
-
-function seedDefaultRivers() {
-  const count = db.prepare('SELECT count(*) as count FROM rivers').get().count;
-  if (count > 0) return;
-
-  const insert = db.prepare(`
-    INSERT INTO rivers (id, name, alternate_names, state, country, latitude, longitude, bbox, length_km, basin, geometry, description)
-    VALUES (@id, @name, @alternate_names, @state, @country, @latitude, @longitude, @bbox, @length_km, @basin, @geometry, @description)
-  `);
-
-  const insertMany = db.transaction((rivers) => {
-    for (const r of rivers) insert.run(r);
-  });
-
-  insertMany(defaultRivers);
-}
-
-async function seedDefaultRiversMongo() {
-  const coll = getMongoDB().collection('rivers');
-  const count = await coll.countDocuments({});
-  if (count > 0) return;
-  await coll.insertMany(defaultRivers);
-}
 
 const sqliteRiverDB = {
   async getAllRivers() {
@@ -457,6 +287,6 @@ const sqliteRiverDB = {
   }
 };
 
-export const RiverDB = USE_MONGO ? mongoRiverDB : sqliteRiverDB;
+export const RiverDB = USE_MONGO ? (await import('./mongo.js')).mongoRiverDB : sqliteRiverDB;
 
 export default RiverDB;
