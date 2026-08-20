@@ -1,53 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import SatelliteHeader from './satellite/SatelliteHeader';
 import RiverMap from './satellite/RiverMap';
 import MetricsGrid from './satellite/MetricsGrid';
 import ImageViewer from './satellite/ImageViewer';
-import HistoryChart from './satellite/HistoryChart';
 import AiInsights from './satellite/AiInsights';
 
 export default function SatelliteMonitoring({ onShowToast, observation, riverData, onObservationChange, onWaterBodyChange, onAreaScanned }) {
-  const [statistics, setStatistics] = useState(null);
-  const [historyData, setHistoryData] = useState([]);
-  const [historyPeriod, setHistoryPeriod] = useState('30d');
-  const [activeChartMetric, setActiveChartMetric] = useState('waterArea');
-  const [isLoading, setIsLoading] = useState(false);
-  const historyRequestRef = useRef(0);
-
-  const loadHistory = async (riverId, period) => {
-    const requestId = ++historyRequestRef.current;
-    try {
-      const res = await fetch(`/api/satellite/history?river=${encodeURIComponent(riverId)}&period=${period}`);
-      const data = await res.json();
-      if (data.success && requestId === historyRequestRef.current) {
-        setHistoryData(data.history || []);
-      }
-    } catch (err) {
-      console.error('Failed to load history:', err);
-    }
-  };
-
-  // Load statistics whenever the active river changes.
-  useEffect(() => {
-    if (!riverData?.id) return;
-    let cancelled = false;
-    setIsLoading(true);
-    fetch(`/api/satellite/statistics?river=${encodeURIComponent(riverData.id)}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && !cancelled) setStatistics(data.statistics);
-      })
-      .catch(err => console.error('Failed to load statistics:', err))
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [riverData?.id]);
-
-  useEffect(() => {
-    if (riverData?.id) loadHistory(riverData.id, historyPeriod);
-  }, [historyPeriod, riverData?.id]);
-
   const handleSelectRiver = (river) => {
     onWaterBodyChange?.(river.id);
     if (onShowToast) {
@@ -94,18 +52,6 @@ export default function SatelliteMonitoring({ onShowToast, observation, riverDat
       {observation && <MetricsGrid observation={observation} />}
 
       {riverData && <ImageViewer riverData={riverData} observation={observation} onShowToast={onShowToast} />}
-
-      {riverData && (
-        <HistoryChart
-          riverData={riverData}
-          historyData={historyData}
-          statistics={statistics}
-          historyPeriod={historyPeriod}
-          onPeriodChange={setHistoryPeriod}
-          activeChartMetric={activeChartMetric}
-          onMetricChange={setActiveChartMetric}
-        />
-      )}
 
       {observation && <AiInsights observation={observation} />}
     </div>
