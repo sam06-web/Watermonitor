@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DEFAULT_MQTT, DEFAULT_PIPES } from '../constants';
 
-const Settings = ({ setPipes, testNotification, leakThreshold, setLeakThreshold, notifications, setNotifications, darkMode, setDarkMode }) => {
+const Settings = ({ setPipes, testNotification, notifications, setNotifications, darkMode, setDarkMode }) => {
 
     // MQTT Settings State
     const [brokerUrl, setBrokerUrl] = useState(() => localStorage.getItem('mqtt-broker') || DEFAULT_MQTT.BROKER);
@@ -161,29 +161,6 @@ const Settings = ({ setPipes, testNotification, leakThreshold, setLeakThreshold,
                                 transform: notifications ? 'translateX(24px)' : 'translateX(0)'
                             }}></span>
                         </label>
-                    </div>
-
-                    <div style={{ marginBottom: '1.5rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                            <div>
-                        <h3 style={{ fontSize: '1rem', color: 'var(--text-primary)' }}>Leak Threshold</h3>
-                                <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Minimum flow rate to trigger alert</p>
-                            </div>
-                            <span style={{ color: 'var(--primary-blue-light)', fontWeight: 'bold' }}>{leakThreshold} L/min</span>
-                        </div>
-                        <input
-                            type="range"
-                            min="0.1"
-                            max="10.0"
-                            step="0.1"
-                            value={leakThreshold}
-                            onChange={(e) => setLeakThreshold(parseFloat(e.target.value))}
-                            style={{
-                                width: '100%',
-                                cursor: 'pointer',
-                                accentColor: 'var(--primary-blue)'
-                            }}
-                        />
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

@@ -1,53 +1,47 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
+
+const generateData = (selectedPeriod) => {
+    const data = [];
+
+    if (selectedPeriod === '24h') {
+        for (let i = 0; i < 24; i++) {
+            let baseValue = 300;
+            if ((i >= 6 && i <= 9) || (i >= 18 && i <= 20)) {
+                baseValue += 500 + Math.random() * 200;
+            } else if (i >= 1 && i <= 5) {
+                baseValue = 100 + Math.random() * 50;
+            } else {
+                baseValue += 200 + Math.random() * 100;
+            }
+            data.push({
+                label: i + ":00",
+                value: Math.floor(baseValue)
+            });
+        }
+    } else if (selectedPeriod === '7d') {
+        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        for (let i = 0; i < 7; i++) {
+            data.push({
+                label: days[i],
+                value: Math.floor(4500 + Math.random() * 500)
+            });
+        }
+    } else {
+        for (let i = 1; i <= 30; i++) {
+            data.push({
+                label: "Day " + i,
+                value: Math.floor(4000 + Math.random() * 800)
+            });
+        }
+    }
+    return data;
+};
 
 const UsageChart = ({ fullView = false }) => {
-    const [chartData, setChartData] = useState([]);
     const [selectedPeriod, setSelectedPeriod] = useState('24h');
 
-    useEffect(() => {
-        // Generate sample data
-        const generateData = () => {
-            const data = [];
-
-            if (selectedPeriod === '24h') {
-                for (let i = 0; i < 24; i++) {
-                    // Simulate realistic daily pattern: Peaks at 7-9 AM and 6-8 PM
-                    let baseValue = 300; // Base usage
-                    if ((i >= 6 && i <= 9) || (i >= 18 && i <= 20)) {
-                        baseValue += 500 + Math.random() * 200; // Peak times
-                    } else if (i >= 1 && i <= 5) {
-                        baseValue = 100 + Math.random() * 50; // Late night low
-                    } else {
-                        baseValue += 200 + Math.random() * 100; // Normal daytime
-                    }
-                    data.push({
-                        label: i + ":00",
-                        value: Math.floor(baseValue)
-                    });
-                }
-            } else if (selectedPeriod === '7d') {
-                for (let i = 0; i < 7; i++) {
-                    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                    // Weekends slightly higher/lower depending on campus usage. 
-                    // Let's assume stable usage with minor variance.
-                    data.push({
-                        label: days[i],
-                        value: Math.floor(4500 + Math.random() * 500)
-                    });
-                }
-            } else {
-                for (let i = 1; i <= 30; i++) {
-                    data.push({
-                        label: "Day " + i,
-                        value: Math.floor(4000 + Math.random() * 800)
-                    });
-                }
-            }
-            return data;
-        };
-
-        setChartData(generateData());
-    }, [selectedPeriod]);
+    // Regenerate the sample series only when the selected period changes.
+    const chartData = useMemo(() => generateData(selectedPeriod), [selectedPeriod]);
 
     if (chartData.length === 0) return <div>Loading Chart...</div>;
 

@@ -194,7 +194,7 @@ const PipeMap = ({ pipes, setPipes, leakagePoints, contaminationPoints = [], cle
             });
         }
 
-    }, [pipes, currentPath, leakagePoints, contaminationPoints, isErasing]); // Re-render when isErasing changes to update styles
+    }, [pipes, setPipes, currentPath, leakagePoints, contaminationPoints, isErasing]); // Re-render when isErasing changes to update styles
 
 
     return (

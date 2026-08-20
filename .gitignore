@@ -36,3 +36,11 @@ server/cache/
 __pycache__/
 *.py[cod]
 *.joblib
+
+# Build / distribution artifacts
+*.zip
+models.txt
+apk-package/
+
+# Generated ML training exports
+ml/*.csv

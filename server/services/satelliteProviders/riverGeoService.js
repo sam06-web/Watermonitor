@@ -17,26 +17,33 @@ export class RiverGeoService {
     const trimmed = query.trim();
     // 1. Check local indexed database first, but continue to the global provider so
     //    cached seed data never hides similarly named lakes or rivers elsewhere.
-    const localMatches = RiverDB.searchRivers(trimmed);
+    const localMatches = await RiverDB.searchRivers(trimmed);
 
     // 2. Query generic, river, and lake forms because Nominatim's free-text
     //    ranking can otherwise favor nearby places over named water bodies.
+    //    The forms are queried sequentially (Nominatim's public API rate limit
+    //    is 1 request/sec; parallel bursts get 429'd and break search).
     try {
       const queries = [...new Set([trimmed, `${trimmed} river`, `${trimmed} lake`])];
-      const responses = await Promise.all(queries.map(queryText => axios.get('https://nominatim.openstreetmap.org/search', {
-        params: {
-          q: queryText,
-          format: 'jsonv2',
-          addressdetails: 1,
-          namedetails: 1,
-          extratags: 1,
-          polygon_geojson: 1,
-          dedupe: 1,
-          limit: 10
-        },
-        headers: { 'User-Agent': 'AquaSentinel-Water-Monitor/1.0 (water-quality-project)' },
-        timeout: 8000
-      })));
+      const responses = [];
+      for (const queryText of queries) {
+        const response = await axios.get('https://nominatim.openstreetmap.org/search', {
+          params: {
+            q: queryText,
+            format: 'jsonv2',
+            addressdetails: 1,
+            namedetails: 1,
+            extratags: 1,
+            polygon_geojson: 1,
+            dedupe: 1,
+            limit: 10
+          },
+          headers: { 'User-Agent': 'AquaSentinel-Water-Monitor/1.0 (water-quality-project)' },
+          timeout: 8000
+        });
+        responses.push(response);
+        if (queries.length > 1) await new Promise(resolve => setTimeout(resolve, 1200));
+      }
 
       const results = [];
       const seen = new Set();
@@ -80,7 +87,7 @@ export class RiverGeoService {
           };
 
           // Save to local cache
-          RiverDB.insertRiver(newRiver);
+          await RiverDB.insertRiver(newRiver);
           results.push(newRiver);
         }
       }
@@ -92,11 +99,11 @@ export class RiverGeoService {
     return localMatches;
   }
 
-  getRiverById(id) {
+  async getRiverById(id) {
     return RiverDB.getRiverById(id);
   }
 
-  getRiverByName(name) {
+  async getRiverByName(name) {
     return RiverDB.getRiverByName(name);
   }
 }

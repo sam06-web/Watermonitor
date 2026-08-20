@@ -1,16 +1,26 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useReducer, useRef, lazy, Suspense } from 'react';
 import mqtt from 'mqtt'; // Import MQTT
-import WaterQuality from './components/WaterQuality';
-import UsageChart from './components/UsageChart';
 import FloatingChat from './components/FloatingChat';
 import PipeMap from './components/PipeMap';
 import Settings from './components/Settings'; // Import Settings
-import FlowMonitor from './components/FlowMonitor'; // Import FlowMonitor
-import SatelliteMonitoring from './components/SatelliteMonitoring'; // Satellite River Monitoring
 import EcoDashboard from './components/EcoDashboard'; // EcoSync Main Dashboard
 import Toast from './components/Toast'; // Import Toast
 import { DEFAULT_LEAKAGE_POINTS, DEFAULT_PIPES, DEFAULT_MQTT } from './constants'; // Import Constants
 import { analyzeContamination } from './utils/waterQuality';
+
+// The satellite view pulls in MapLibre GL (~600 KB), so it is lazy-loaded
+// into a separate chunk that only downloads when the Satellite tab is opened.
+const SatelliteMonitoring = lazy(() => import('./components/SatelliteMonitoring'));
+
+const modelStatusReducer = (state, action) => {
+  switch (action) {
+    case 'loading': return 'loading';
+    case 'ready': return 'ready';
+    case 'unavailable': return 'unavailable';
+    case 'idle': return 'idle';
+    default: return state;
+  }
+};
 
 function App() {
   const [activeView, setActiveView] = useState('dashboard');
@@ -30,14 +40,11 @@ function App() {
   const [satelliteRiver, setSatelliteRiver] = useState(null);
   const [selectedSatelliteWaterBody, setSelectedSatelliteWaterBody] = useState('cauvery');
   const [modelPrediction, setModelPrediction] = useState(null);
-  const [modelStatus, setModelStatus] = useState('idle');
+  const [modelStatus, dispatchModelStatus] = useReducer(modelStatusReducer, 'idle');
 
   // State for Real-time Water Quality Metrics
-  const [realTimeMetrics, setRealTimeMetrics] = useState({ flow1: 0, flow2: 0, leak: 0, tds: 0 });
-  const [waterQualityMetrics, setWaterQualityMetrics] = useState({
-    ph: 0,
-    turbidity: 0
-  });
+  const [realTimeMetrics, setRealTimeMetrics] = useState({ tds: 0 });
+  const [waterQualityMetrics, setWaterQualityMetrics] = useState({ ph: 0, turbidity: 0 });
 
   // MQTT Connection Status
   const [mqttStatus, setMqttStatus] = useState('connecting');
@@ -47,8 +54,14 @@ function App() {
   const [notifications, setNotifications] = useState([]);
   const [darkMode, setDarkMode] = useState(false);
 
-  const lastLeakNotificationRef = useRef(0);
   const clientRef = useRef(null);
+
+  // Keep the latest satellite observation available to the MQTT message handler
+  // without tearing down the broker connection when it changes.
+  const satelliteObservationRef = useRef(satelliteObservation);
+  useEffect(() => {
+    satelliteObservationRef.current = satelliteObservation;
+  }, [satelliteObservation]);
 
   // Satellite observations are intentionally loaded independently from MQTT.
   // Sensors provide continuous readings while Sentinel observations validate spatial conditions periodically.
@@ -74,6 +87,11 @@ function App() {
               source: 'satellite'
             }]);
           }
+        } else if (data.river) {
+          // No observation yet for this water body (e.g. freshly searched);
+          // still expose the river so the satellite view can map it.
+          setSatelliteRiver(data.river);
+          setSatelliteObservation(null);
         }
       })
       .catch(error => {
@@ -93,7 +111,7 @@ function App() {
     if (![sample.ph, sample.tds, sample.turbidity].every(Number.isFinite) || Object.values(sample).some(value => value <= 0)) return;
 
     const controller = new AbortController();
-    setModelStatus('loading');
+    dispatchModelStatus('loading');
     fetch('/api/water-quality/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -104,10 +122,10 @@ function App() {
       .then(({ ok, data }) => {
         if (!ok) throw new Error(data.error || 'Prediction failed');
         setModelPrediction(data);
-        setModelStatus('ready');
+        dispatchModelStatus('ready');
       })
       .catch(error => {
-        if (error.name !== 'AbortError') setModelStatus('unavailable');
+        if (error.name !== 'AbortError') dispatchModelStatus('unavailable');
       });
 
     return () => controller.abort();
@@ -118,21 +136,17 @@ function App() {
     localStorage.setItem('water-app-pipes', JSON.stringify(pipes));
   }, [pipes]);
 
-  // State for Leak Threshold
-  const [leakThreshold, setLeakThreshold] = useState(() => {
-    return parseFloat(localStorage.getItem('leak-threshold')) || 0.1;
-  });
-
-  // Persistence for leak threshold
-  useEffect(() => {
-    localStorage.setItem('leak-threshold', leakThreshold);
-  }, [leakThreshold]);
+  // A user-scanned map area produced a real observation; render it directly
+  // without re-resolving the (already persisted) transient river record.
+  const handleAreaScanned = (river, observation) => {
+    setSatelliteRiver(river);
+    setSatelliteObservation(observation);
+  };
 
   // MQTT Connection Effect
   useEffect(() => {
     const brokerUrl = localStorage.getItem('mqtt-broker') || DEFAULT_MQTT.BROKER;
     const topic = localStorage.getItem('mqtt-topic') || DEFAULT_MQTT.TOPIC;
-    const pipesTopic = `${topic}/pipes`;
 
     const isSecure = window.location.protocol === 'https:';
     let processedBrokerUrl = brokerUrl ? brokerUrl.trim() : '';
@@ -158,7 +172,6 @@ function App() {
       new URL(processedBrokerUrl);
 
       console.log(`Connecting to MQTT Broker: ${processedBrokerUrl} (Secure: ${isSecure})`);
-      setMqttStatus('connecting');
 
       // Connect with WebSocket options
       const client = mqtt.connect(processedBrokerUrl, {
@@ -172,14 +185,12 @@ function App() {
         console.log('Successfully connected to MQTT Broker at', processedBrokerUrl);
         setMqttStatus('connected');
 
-        // Subscribe to Topics
+        // Subscribe to the sensor data topic
         client.subscribe(topic, (err) => {
           if (!err) console.log(`Subscribed to topic: ${topic}`);
         });
+        // Also subscribe to the hardcoded fallback so messages arrive regardless of config
         client.subscribe('water/data');
-        client.subscribe(pipesTopic, (err) => {
-          if (!err) console.log(`Subscribed to pipes sync topic: ${pipesTopic}`);
-        });
       });
 
       client.on('error', (err) => {
@@ -198,123 +209,70 @@ function App() {
       });
 
       client.on('message', (receivedTopic, message) => {
-        const msgString = message.toString();
-        // console.log(`Received message on topic [${receivedTopic}]`);
+        if (receivedTopic !== topic && receivedTopic !== 'water/data') return;
 
-        // Handle Pipe Sync
-        if (receivedTopic === pipesTopic) {
-          try {
-            const receivedPipes = JSON.parse(msgString);
-            setPipes(currentPipes => {
-              // Simple check to avoid loops/unnecessary updates
-              if (JSON.stringify(currentPipes) !== JSON.stringify(receivedPipes)) {
-                console.log('Syncing pipes from MQTT');
-                return receivedPipes;
-              }
-              return currentPipes;
+        try {
+          const payload = JSON.parse(message.toString());
+
+          // Expected hardware payload: { ph, turbidity, tds_ppm, lat, lng }
+
+          // Water quality sensor readings
+          if (payload.ph !== undefined) {
+            setWaterQualityMetrics(prev => ({ ...prev, ph: payload.ph }));
+          }
+          if (payload.turbidity !== undefined) {
+            setWaterQualityMetrics(prev => ({ ...prev, turbidity: payload.turbidity }));
+          }
+          if (payload.tds_ppm !== undefined) {
+            setRealTimeMetrics(prev => ({ ...prev, tds: payload.tds_ppm }));
+          }
+
+          // GPS coordinates — place/update a pin on the map and run contamination analysis
+          if (payload.lat !== undefined && payload.lng !== undefined) {
+            const pinId = `sensor-${payload.lat}-${payload.lng}`;
+
+            setLeakagePoints(prev => {
+              const exists = prev.find(p => p.id === pinId);
+              const pin = { id: pinId, lat: payload.lat, lng: payload.lng };
+              return exists
+                ? prev.map(p => p.id === pinId ? { ...p, ...pin } : p)
+                : [...prev, pin];
             });
-          } catch (e) {
-            console.error('Failed to parse pipes sync message', e);
+
+            const analysis = analyzeContamination({
+              ph: payload.ph ?? 7.2,
+              tds: payload.tds_ppm ?? 420,
+              turbidity: payload.turbidity ?? 2.1,
+              satellite: satelliteObservationRef.current
+            });
+
+            setContaminationPoints(prev => {
+              const point = {
+                id: pinId,
+                lat: Number(payload.lat),
+                lng: Number(payload.lng),
+                location: 'Sensor station',
+                severity: analysis.risk,
+                qualityScore: analysis.score,
+                contaminationType: analysis.type,
+                cause: analysis.cause,
+                ph: payload.ph,
+                tds: payload.tds_ppm,
+                turbidity: payload.turbidity,
+                source: 'sensor'
+              };
+              return prev.some(item => item.id === point.id)
+                ? prev.map(item => item.id === point.id ? point : item)
+                : [...prev, point];
+            });
           }
-          return;
-        }
-
-        if (receivedTopic === topic || receivedTopic === 'water/data') {
-          try {
-            const payload = JSON.parse(msgString);
-            // console.log('Parsed MQTT Payload:', payload);
-
-            // Expecting payload: { id, lat, lng, severity, flowRate, location }
-            // Update leakage points if valid data
-            if (payload.lat && payload.lng) {
-              setLeakagePoints(prevLeaks => {
-                // Avoid duplicates or update existing
-                const exists = prevLeaks.find(l => l.id === payload.id);
-                if (exists) {
-                  return prevLeaks.map(l => l.id === payload.id ? { ...l, ...payload } : l);
-                }
-                return [...prevLeaks, { ...payload, id: payload.id || Date.now() }];
-              });
-
-              if (payload.ph !== undefined || payload.tds_ppm !== undefined || payload.turbidity !== undefined || payload.contamination) {
-                const analysis = analyzeContamination({
-                  ph: payload.ph ?? 7.2,
-                  tds: payload.tds_ppm ?? 420,
-                  turbidity: payload.turbidity ?? 2.1,
-                  satellite: satelliteObservation
-                });
-                setContaminationPoints(prev => {
-                  const point = {
-                    id: payload.id || `sensor-${payload.lat}-${payload.lng}`,
-                    lat: Number(payload.lat),
-                    lng: Number(payload.lng),
-                    location: payload.location || 'Sensor station',
-                    severity: analysis.risk,
-                    qualityScore: analysis.score,
-                    contaminationType: analysis.type,
-                    cause: analysis.cause,
-                    ph: payload.ph,
-                    tds: payload.tds_ppm,
-                    turbidity: payload.turbidity,
-                    source: 'sensor'
-                  };
-                  return prev.some(item => item.id === point.id)
-                    ? prev.map(item => item.id === point.id ? point : item)
-                    : [...prev, point];
-                });
-              }
-            }
-
-            // Handle TDS Data (expecting { tds_ppm: number })
-            if (payload.tds_ppm !== undefined) {
-              setRealTimeMetrics(prev => ({ ...prev, tds: payload.tds_ppm }));
-            }
-
-            // Handle PH Data
-            if (payload.ph !== undefined) {
-              setWaterQualityMetrics(prev => ({ ...prev, ph: payload.ph }));
-            }
-
-            // Handle Turbidity Data
-            if (payload.turbidity !== undefined) {
-              setWaterQualityMetrics(prev => ({ ...prev, turbidity: payload.turbidity }));
-            }
-
-            // Handle Dual Flow Sensor Data (Hardware Keys)
-            if (payload.inlet_lpm !== undefined) {
-              setRealTimeMetrics(prev => ({ ...prev, flow1: payload.inlet_lpm }));
-            }
-            if (payload.outlet_lpm !== undefined) {
-              setRealTimeMetrics(prev => ({ ...prev, flow2: payload.outlet_lpm }));
-            }
-            if (payload.leak_lpm !== undefined) {
-              setRealTimeMetrics(prev => ({ ...prev, leak: payload.leak_lpm }));
-
-              // Trigger notification if leak is detected (> threshold) 
-              // and it's been at least 1 minute since the last notification
-              if (notificationsEnabled && payload.leak_lpm > leakThreshold) {
-                const now = Date.now();
-                if (now - lastLeakNotificationRef.current > 60000) {
-                  const id = now;
-                  setNotifications(prev => [...prev, {
-                    id,
-                    title: 'Leak Detected!',
-                    message: `Leak of ${payload.leak_lpm} LPM detected (Threshold: ${leakThreshold})`,
-                    type: 'danger'
-                  }]);
-                  lastLeakNotificationRef.current = now;
-                }
-              }
-            }
-
-          } catch (error) {
-            console.error('Failed to parse MQTT message:', error);
-          }
+        } catch (error) {
+          console.error('Failed to parse MQTT message:', error);
         }
       });
     } catch (err) {
       console.error('MQTT setup error:', err);
-      setMqttStatus('error');
+      queueMicrotask(() => setMqttStatus('error'));
     }
 
     return () => {
@@ -322,19 +280,7 @@ function App() {
         clientRef.current.end();
       }
     };
-  }, [DEFAULT_MQTT.BROKER, DEFAULT_MQTT.TOPIC, leakThreshold, notificationsEnabled]);
-
-  // Effect to Publish Pipe Changes to MQTT
-  useEffect(() => {
-    if (clientRef.current && clientRef.current.connected) {
-      const topic = localStorage.getItem('mqtt-topic') || DEFAULT_MQTT.TOPIC;
-      const pipesTopic = `${topic}/pipes`;
-      // Check if we need to publish (simple de-bounce or check could be added here if needed)
-      // For now, any state change triggers a publish, but the receiver checks for equality.
-      // We use retain: true so new devices get the map immediately.
-      clientRef.current.publish(pipesTopic, JSON.stringify(pipes), { retain: true });
-    }
-  }, [pipes]);
+  }, []);
 
   return (
     <div className={`eco-mobile-frame ${darkMode ? 'dark-mode' : ''}`}>
@@ -383,11 +329,16 @@ function App() {
         )}
 
         {activeView === 'satellite' && (
-          <SatelliteMonitoring
-            selectedWaterBodyId={selectedSatelliteWaterBody}
-            onWaterBodyChange={setSelectedSatelliteWaterBody}
-            onShowToast={(toast) => setNotifications(prev => [...prev, { id: Date.now(), ...toast }])}
-          />
+          <Suspense fallback={<div style={{ padding: '3rem 1rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading satellite monitoring view...</div>}>
+            <SatelliteMonitoring
+              observation={satelliteObservation}
+              riverData={satelliteRiver}
+              onObservationChange={setSatelliteObservation}
+              onWaterBodyChange={setSelectedSatelliteWaterBody}
+              onAreaScanned={handleAreaScanned}
+              onShowToast={(toast) => setNotifications(prev => [...prev, { id: Date.now(), ...toast }])}
+            />
+          </Suspense>
         )}
 
         {activeView === 'map' && (
@@ -420,16 +371,14 @@ function App() {
           <div style={{ padding: '0 1rem 1.5rem' }}>
             <Settings
               setPipes={setPipes}
-              leakThreshold={leakThreshold}
-              setLeakThreshold={setLeakThreshold}
               notifications={notificationsEnabled}
               setNotifications={setNotificationsEnabled}
               darkMode={darkMode}
               setDarkMode={setDarkMode}
               testNotification={() => setNotifications(prev => [...prev, {
                 id: Date.now(),
-                title: 'Leak Detected!',
-                message: 'Abnormal flow detected in main line.',
+                title: 'Test Alert',
+                message: 'Notification system is working correctly.',
                 type: 'danger'
               }])}
             />
@@ -511,7 +460,6 @@ function App() {
         satelliteRiver={satelliteRiver}
         contaminationPoints={contaminationPoints}
         modelPrediction={modelPrediction}
-        leakThreshold={leakThreshold}
       />
     </div>
   );

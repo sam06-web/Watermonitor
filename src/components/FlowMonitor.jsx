@@ -1,38 +1,37 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useReducer } from 'react';
+
+const MAX_DATA_POINTS = 50;
+
+const createInitialHistory = () => {
+    const initialData = [];
+    const now = new Date();
+    for (let i = 20; i >= 0; i--) {
+        const time = new Date(now.getTime() - i * 5000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        initialData.push({ time, value: 0 });
+    }
+    return {
+        flow1: [...initialData],
+        flow2: [...initialData],
+        leak: [...initialData]
+    };
+};
+
+const historyReducer = (state, action) => {
+    if (action.type !== 'append') return state;
+    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const { flow1 = 0, flow2 = 0, leak = 0 } = action.data;
+    return {
+        flow1: [...state.flow1, { time: now, value: flow1 }].slice(-MAX_DATA_POINTS),
+        flow2: [...state.flow2, { time: now, value: flow2 }].slice(-MAX_DATA_POINTS),
+        leak: [...state.leak, { time: now, value: leak }].slice(-MAX_DATA_POINTS)
+    };
+};
 
 const FlowMonitor = ({ realTimeData = {}, leakThreshold = 0.5 }) => {
-    // Initialize with some mock data so the user sees something immediately
-    const [history, setHistory] = useState(() => {
-        const initialData = [];
-        const now = new Date();
-        for (let i = 20; i >= 0; i--) {
-            const time = new Date(now.getTime() - i * 5000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            initialData.push({ time, value: 0 });
-        }
-        return {
-            flow1: [...initialData],
-            flow2: [...initialData],
-            leak: [...initialData]
-        };
-    });
-
-    const maxDataPoints = 50;
+    const [history, dispatch] = useReducer(historyReducer, undefined, createInitialHistory);
 
     useEffect(() => {
-        // Only update if we have actual data or to keep the "pulse" alive
-        setHistory(prev => {
-            const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-            const newFlow1 = [...prev.flow1, { time: now, value: realTimeData.flow1 ?? 0 }];
-            const newFlow2 = [...prev.flow2, { time: now, value: realTimeData.flow2 ?? 0 }];
-            const newLeak = [...prev.leak, { time: now, value: realTimeData.leak ?? 0 }];
-
-            return {
-                flow1: newFlow1.slice(-maxDataPoints),
-                flow2: newFlow2.slice(-maxDataPoints),
-                leak: newLeak.slice(-maxDataPoints)
-            };
-        });
+        dispatch({ type: 'append', data: realTimeData });
     }, [realTimeData]);
 
     const renderLineChart = (data, color, label) => {

@@ -7,8 +7,8 @@ import waterQualityRouter from './routes/waterQualityRoutes.js';
 
 const app = express();
 
-// Initialize SQLite database
-initDatabase();
+// Initialize database (MongoDB Atlas when MONGODB_URI is set, else SQLite)
+await initDatabase();
 
 // Middleware
 app.use(cors());

@@ -24,6 +24,32 @@ function ensureCacheDir() {
   fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
 }
 
+// Clamp the processing window to a small box centred on the river so each
+// Sentinel-2 scene clips a focused reach instead of the whole basin. Seeded
+// rivers store basin-wide bboxes (e.g. Cauvery spans several degrees) which
+// makes every scene enormous to read and can push the ML processor past its
+// chunk timeout. A tight window is also more representative of the river
+// course, avoiding lakes/fields that inflate water-area and width estimates.
+const MAX_BBOX_SPAN = 0.5;
+function clampBbox(bbox, lat, lng) {
+  const box = Array.isArray(bbox) ? bbox.map(Number) : null;
+  if (!box || box.length !== 4 || !box.every(Number.isFinite)) {
+    return [lng - 0.25, lat - 0.25, lng + 0.25, lat + 0.25];
+  }
+  let [west, south, east, north] = box;
+  if (east - west > MAX_BBOX_SPAN) {
+    const center = (west + east) / 2;
+    west = center - MAX_BBOX_SPAN / 2;
+    east = center + MAX_BBOX_SPAN / 2;
+  }
+  if (north - south > MAX_BBOX_SPAN) {
+    const center = (south + north) / 2;
+    south = center - MAX_BBOX_SPAN / 2;
+    north = center + MAX_BBOX_SPAN / 2;
+  }
+  return [west, south, east, north];
+}
+
 function cachedImagePath(riverQuery, dateStr, type) {
   return path.join(IMAGE_CACHE_DIR, `${safeFileName(riverQuery)}-${dateStr}-${type}.png`);
 }
@@ -68,9 +94,9 @@ async function fetchSwotMetrics(river, token) {
  */
 async function resolveRiver(req) {
   const query = req.query.river || req.query.river_id || req.query.name || 'cauvery';
-  let river = RiverDB.getRiverById(query.toLowerCase());
+  let river = await RiverDB.getRiverById(query.toLowerCase());
   if (!river) {
-    river = RiverDB.getRiverByName(query);
+    river = await RiverDB.getRiverByName(query);
   }
   if (!river) {
     const searchRes = await RiverGeoService.searchRivers(query);
@@ -78,7 +104,7 @@ async function resolveRiver(req) {
       river = searchRes[0];
     }
   }
-  return river || RiverDB.getRiverById('cauvery');
+  return river || await RiverDB.getRiverById('cauvery');
 }
 
 /**
@@ -123,7 +149,7 @@ router.get('/latest', async (req, res) => {
       return res.status(404).json({ success: false, message: 'River not found' });
     }
 
-    let observation = RiverDB.getLatestObservation(river.id);
+    let observation = await RiverDB.getLatestObservation(river.id);
     const isObservationReal = observation?.raw_metadata?.includes('"source":"real"') ?? false;
     const observationTime = new Date(observation?.image_timestamp || observation?.image_date || 0).getTime();
     const isObservationStale = !Number.isFinite(observationTime) || Date.now() - observationTime >= SATELLITE_REFRESH_INTERVAL_MS;
@@ -139,7 +165,10 @@ router.get('/latest', async (req, res) => {
         lastRefreshAttempt.set(river.id, Date.now());
         refreshRiverObservation(river)
           .then(() => {
-            observation = RiverDB.getLatestObservation(river.id);
+            return RiverDB.getLatestObservation(river.id);
+          })
+          .then(obs => {
+            observation = obs;
           })
           .catch(error => console.warn(`Real satellite refresh failed for ${river.name}: ${error.message}`));
       }
@@ -150,10 +179,24 @@ router.get('/latest', async (req, res) => {
       } catch (error) {
         console.warn(`Real satellite refresh failed for ${river.name}: ${error.message}`);
         if (!observation) {
+          const geometry = typeof river.geometry === 'string' ? JSON.parse(river.geometry) : river.geometry;
+          const bbox = typeof river.bbox === 'string' ? JSON.parse(river.bbox) : river.bbox;
           return res.status(503).json({
             success: false,
             message: 'No real satellite observation is available yet. The live sensor dashboard remains fully operational.',
-            error: error.message
+            error: error.message,
+            river: {
+              id: river.id,
+              name: river.name,
+              state: river.state,
+              country: river.country,
+              latitude: river.latitude,
+              longitude: river.longitude,
+              bbox: bbox,
+              geometry: geometry,
+              length_km: river.length_km,
+              basin: river.basin
+            }
           });
         }
       }
@@ -226,7 +269,7 @@ router.get('/history', async (req, res) => {
     else if (periodStr === '6m' || periodStr === '6months') limitDays = 180;
     else if (periodStr === '1y' || periodStr === '1year') limitDays = 365;
 
-    const rawHistory = RiverDB.getHistory(river.id, limitDays);
+    const rawHistory = await RiverDB.getHistory(river.id, limitDays);
 
     const history = rawHistory.map(item => ({
       id: item.id,
@@ -265,7 +308,7 @@ router.get('/history', async (req, res) => {
 router.get('/statistics', async (req, res) => {
   try {
     const river = await resolveRiver(req);
-    const data = RiverDB.getStatistics(river.id);
+    const data = await RiverDB.getStatistics(river.id);
 
     res.json({
       success: true,
@@ -329,6 +372,7 @@ async function refreshRiverObservation(river) {
       Number(river.latitude) + 0.3
     ];
   }
+  bbox = clampBbox(bbox, Number(river.latitude), Number(river.longitude));
 
   const end = new Date().toISOString().split('T')[0];
   const start = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -365,7 +409,7 @@ async function refreshRiverObservation(river) {
   }
 
   await persistRealObservation(river, real, bbox);
-  return RiverDB.getLatestObservation(river.id);
+  return await RiverDB.getLatestObservation(river.id);
 }
 
 /**
@@ -388,7 +432,7 @@ async function persistRealObservation(river, real, bbox, { enrichment = 'live' }
     ]);
   }
 
-  const existingScene = RiverDB.getObservationByScene(river.id, sceneDate, real.scene?.platform);
+  const existingScene = await RiverDB.getObservationByScene(river.id, sceneDate, real.scene?.platform);
 
   const temperature = Number.isFinite(Number(hydroData?.surfaceTemp)) ? Number(hydroData.surfaceTemp) : null;
   const riverWidth = Number.isFinite(Number(swotData?.width_m)) ? Number(swotData.width_m) : real.river_width_m;
@@ -410,7 +454,7 @@ async function persistRealObservation(river, real, bbox, { enrichment = 'live' }
     const storedTemp = Number(existingScene.temperature);
     const needsHistoricalTemp = enrichment === 'historical' && (!Number.isFinite(storedTemp) || storedTemp <= 0);
     if (needsHistoricalTemp || enrichment === 'historical') {
-      RiverDB.updateObservation({
+      await RiverDB.updateObservation({
         id: existingScene.id,
         temperature: temperature ?? 0,
         flood_status: aiResult.floodStatus,
@@ -473,7 +517,7 @@ async function persistRealObservation(river, real, bbox, { enrichment = 'live' }
     })
   };
 
-  RiverDB.insertObservation(newObsData);
+  await RiverDB.insertObservation(newObsData);
 }
 
 /**
@@ -499,6 +543,7 @@ router.post('/backfill', async (req, res) => {
         Number(river.latitude) + 0.3
       ];
     }
+    bbox = clampBbox(bbox, Number(river.latitude), Number(river.longitude));
 
     const end = req.body?.end || new Date().toISOString().split('T')[0];
     const start = req.body?.start || new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -565,6 +610,150 @@ router.post('/backfill', async (req, res) => {
     });
   } catch (error) {
     console.error('Backfill satellite history error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+function mapRiverApi(river) {
+  return {
+    id: river.id,
+    name: river.name,
+    state: river.state,
+    country: river.country,
+    latitude: river.latitude,
+    longitude: river.longitude,
+    bbox: typeof river.bbox === 'string' ? JSON.parse(river.bbox) : river.bbox,
+    geometry: typeof river.geometry === 'string' ? JSON.parse(river.geometry) : river.geometry,
+    length_km: river.length_km,
+    basin: river.basin
+  };
+}
+
+function mapObservationApi(observation) {
+  return {
+    id: observation.id,
+    satelliteName: observation.satellite_name,
+    sensor: observation.sensor,
+    imageDate: observation.image_date,
+    imageTimestamp: observation.image_timestamp,
+    cloudCover: observation.cloud_cover,
+    resolution: observation.resolution,
+    ndwi: observation.ndwi,
+    ndvi: observation.ndvi,
+    waterAreaSqKm: observation.water_area,
+    riverWidthMeters: observation.river_width,
+    surfaceTemperatureC: observation.temperature,
+    turbidityNtu: observation.turbidity,
+    floodStatus: observation.flood_status,
+    floodRiskPct: observation.flood_risk_pct,
+    waterLevelMeters: observation.water_level,
+    healthScore: observation.health_score,
+    waterAvailability: observation.water_availability,
+    pollutionRisk: observation.pollution_risk,
+    aiSummary: observation.ai_summary,
+    aiRecommendation: observation.ai_recommendation,
+    imageUrl: observation.image_url,
+    ndwiImageUrl: observation.ndwi_image_url,
+    falseColorImageUrl: observation.false_color_image_url,
+    prevImageUrl: observation.prev_image_url,
+    rawMetadata: observation.raw_metadata ? JSON.parse(observation.raw_metadata) : null
+  };
+}
+
+/**
+ * POST /api/satellite/scan
+ * Process a real Sentinel-2 scene over an arbitrary user-drawn area.
+ * Body: { bbox: [west, south, east, north], lat?, lng?, name?, start?, end? }
+ * Creates a transient river record for the scanned box, runs the real ML
+ * satellite processor over it, persists the observation, and returns both so
+ * the whole satellite dashboard renders for the selected area.
+ */
+router.post('/scan', async (req, res) => {
+  try {
+    const { bbox, lat, lng, name, start, end } = req.body || {};
+    if (!Array.isArray(bbox) || bbox.length !== 4 || !bbox.every(Number.isFinite)) {
+      return res.status(400).json({ success: false, error: 'Provide bbox as [west, south, east, north].' });
+    }
+
+    const SCAN_MAX_SPAN = 1.0;
+    let [west, south, east, north] = bbox.map(Number);
+    if (east - west > SCAN_MAX_SPAN) {
+      const center = (west + east) / 2;
+      west = center - SCAN_MAX_SPAN / 2;
+      east = center + SCAN_MAX_SPAN / 2;
+    }
+    if (north - south > SCAN_MAX_SPAN) {
+      const center = (south + north) / 2;
+      south = center - SCAN_MAX_SPAN / 2;
+      north = center + SCAN_MAX_SPAN / 2;
+    }
+    const scanBbox = [west, south, east, north];
+    const centerLat = Number.isFinite(Number(lat)) ? Number(lat) : (south + north) / 2;
+    const centerLng = Number.isFinite(Number(lng)) ? Number(lng) : (west + east) / 2;
+
+    const scanId = `scan-${Date.now()}`;
+    const scanName = String(name || 'Scanned Area').trim().slice(0, 120);
+    const river = {
+      id: scanId,
+      name: scanName,
+      alternate_names: scanName,
+      state: '',
+      country: '',
+      latitude: centerLat,
+      longitude: centerLng,
+      bbox: JSON.stringify(scanBbox),
+      length_km: null,
+      basin: `${scanName} Basin`,
+      geometry: JSON.stringify({
+        type: 'Polygon',
+        coordinates: [[
+          [west, south], [east, south], [east, north], [west, north], [west, south]
+        ]]
+      }),
+      description: `User-scanned area centred at ${centerLat.toFixed(4)}, ${centerLng.toFixed(4)}`
+    };
+    await RiverDB.insertRiver(river);
+
+    const endDate = end || new Date().toISOString().split('T')[0];
+    const startDate = start || new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 150000);
+    let real;
+    try {
+      const response = await fetch(`${config.ml.url}/satellite/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bbox: scanBbox,
+          lat: centerLat,
+          lng: centerLng,
+          max_cloud: 60,
+          start: startDate,
+          end: endDate
+        }),
+        signal: controller.signal
+      });
+      if (!response.ok) {
+        throw new Error(`Satellite processor returned HTTP ${response.status}`);
+      }
+      real = await response.json();
+    } catch (error) {
+      throw new Error(`Real Sentinel-2 processing unavailable for this area: ${error.message}`);
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (real.source !== 'real') {
+      throw new Error(real.error || 'No real Sentinel-2 scene was available over this area.');
+    }
+
+    await persistRealObservation(river, real, scanBbox, { enrichment: 'live' });
+    const observation = await RiverDB.getLatestObservation(river.id);
+
+    res.json({ success: true, river: mapRiverApi(river), observation: observation ? mapObservationApi(observation) : null });
+  } catch (error) {
+    console.error('Scan area error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

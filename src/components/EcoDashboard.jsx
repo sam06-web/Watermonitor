@@ -9,19 +9,20 @@ function Status({ status }) {
 }
 
 export default function EcoDashboard({ realTimeData = {}, waterQuality = {}, satelliteObservation, satelliteRiver, contaminationPoints = [], modelPrediction, modelStatus = 'idle', onNavigate }) {
-  const getSensorValue = value => {
-    const numericValue = Number(value);
-    return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : null;
-  };
-  const values = {
-    ph: getSensorValue(waterQuality.ph),
-    turbidity: getSensorValue(waterQuality.turbidity),
-    tds: getSensorValue(realTimeData.tds)
-  };
-  const hasLiveSensorData = Object.values(values).every(value => value !== null);
-  const analysis = useMemo(() => {
-    if (!hasLiveSensorData) {
-      return {
+  const { values, hasLiveSensorData, analysis } = useMemo(() => {
+    const getSensorValue = value => {
+      const numericValue = Number(value);
+      return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : null;
+    };
+    const values = {
+      ph: getSensorValue(waterQuality.ph),
+      turbidity: getSensorValue(waterQuality.turbidity),
+      tds: getSensorValue(realTimeData.tds)
+    };
+    const hasLiveSensorData = Object.values(values).every(value => value !== null);
+    const analysis = hasLiveSensorData
+      ? analyzeContamination({ ...values, satellite: satelliteObservation })
+      : {
         score: null,
         status: 'pending',
         components: { ph: 0, tds: 0, turbidity: 0 },
@@ -29,9 +30,8 @@ export default function EcoDashboard({ realTimeData = {}, waterQuality = {}, sat
         cause: 'Connect the pH, TDS, and turbidity sensors to calculate the live water-quality index and contamination summary.',
         abnormal: []
       };
-    }
-    return analyzeContamination({ ...values, satellite: satelliteObservation });
-  }, [values, hasLiveSensorData, satelliteObservation]);
+    return { values, hasLiveSensorData, analysis };
+  }, [waterQuality.ph, waterQuality.turbidity, realTimeData.tds, satelliteObservation]);
   const latestEvent = contaminationPoints[contaminationPoints.length - 1];
   const satelliteRisk = satelliteObservation?.pollutionRisk || 'Not evaluated';
 

@@ -17,7 +17,13 @@ export const config = {
   },
   
   // Database Configuration
+  // When MONGODB_URI is set the server uses MongoDB Atlas; otherwise it falls
+  // back to the local SQLite database.
   dbPath: process.env.DATABASE_PATH || path.resolve(__dirname, '../db/satellite.db'),
+  mongodb: {
+    uri: process.env.MONGODB_URI || '',
+    dbName: process.env.MONGODB_DB_NAME || 'aquasense'
+  },
 
   // Real satellite imagery cache (PNG files rendered from Sentinel-2 COGs)
   satellite: {
@@ -26,46 +32,11 @@ export const config = {
 
   // Satellite Provider Credentials (Flexible & Modular - None hardcoded)
   providers: {
-    // Copernicus Data Space Ecosystem (CDSE)
-    copernicus: {
-      clientId: process.env.CDSE_CLIENT_ID || '',
-      clientSecret: process.env.CDSE_CLIENT_SECRET || '',
-      tokenUrl: 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token',
-      odataUrl: 'https://catalogue.dataspace.copernicus.eu/odata/v1/Products',
-      stacUrl: 'https://catalogue.dataspace.copernicus.eu/stac'
-    },
-    
-    // Sentinel Hub API
-    sentinelHub: {
-      instanceId: process.env.SENTINEL_HUB_INSTANCE_ID || '',
-      clientId: process.env.SENTINEL_HUB_CLIENT_ID || '',
-      clientSecret: process.env.SENTINEL_HUB_CLIENT_SECRET || '',
-      processUrl: 'https://services.sentinel-hub.com/api/v1/process'
-    },
-
-    // Open STAC Catalogs (Real public endpoints, zero key required by default)
-    earthSearchStac: {
-      url: process.env.EARTH_SEARCH_STAC_URL || 'https://earth-search.aws.element84.com/v1',
-      collections: ['sentinel-2-l2a', 'landsat-c2-l2']
-    },
-
-    planetaryComputer: {
-      url: process.env.PLANETARY_COMPUTER_STAC_URL || 'https://planetarycomputer.microsoft.com/api/stac/v1',
-      subscriptionKey: process.env.PC_SUBSCRIPTION_KEY || ''
-    },
-
     // SWOT Hydrology & NASA PO.DAAC
     swot: {
       podaacApiKey: process.env.NASA_EARTHDATA_KEY || '',
       token: process.env.NASA_EARTHDATA_TOKEN || '',
       cmrUrl: 'https://cmr.earthdata.nasa.gov/search/granules.json'
-    },
-
-    // Google Earth Engine (Interface Stub / Service Account)
-    googleEarthEngine: {
-      serviceAccountEmail: process.env.GEE_SERVICE_ACCOUNT || '',
-      privateKey: process.env.GEE_PRIVATE_KEY || '',
-      projectId: process.env.GEE_PROJECT_ID || ''
     },
 
     // Open-Meteo & ERA5 Land Surface Hydrology (Real Land Surface Temperature & Runoff)

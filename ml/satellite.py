@@ -4,7 +4,7 @@ import math
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 import rasterio
@@ -85,13 +85,22 @@ def _search_stac(bbox, start, end, max_cloud, limit=12, ascending=False, max_pag
 
 
 def _sign_asset(href):
-    if _token_cache['token'] and time.time() < _token_cache['expires']:
+    if _token_cache['token'] and _token_cache['expires'] and time.time() < _token_cache['expires']:
         return f'{href}?{_token_cache["token"]}'
     try:
-        token = requests.get(SAS_TOKEN_URL, timeout=20).json().get('token')
+        resp = requests.get(SAS_TOKEN_URL, timeout=20).json()
+        token = resp.get('token')
         if token:
             _token_cache['token'] = token
-            _token_cache['expires'] = time.time() + 60 * 60 * 20
+            # Honour the real SAS lifetime. Anonymous Planetary Computer
+            # tokens expire in ~45 minutes; assuming a 20-hour validity makes
+            # every band read return HTTP 403 once the cached token goes stale.
+            try:
+                expiry = datetime.fromisoformat(str(resp.get('msft:expiry', '')).replace('Z', '+00:00'))
+                ttl = min((expiry - datetime.now(timezone.utc)).total_seconds(), 3600)
+            except (ValueError, TypeError):
+                ttl = 2400  # 40-minute default
+            _token_cache['expires'] = time.time() + max(ttl, 60)
             return f'{href}?{token}'
     except (requests.RequestException, ValueError):
         pass
