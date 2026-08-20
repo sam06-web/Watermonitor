@@ -57,7 +57,7 @@ const UsageChart = ({ fullView = false }) => {
 
     // Advanced Analytics for Full View
     const peakHour = chartData.reduce((max, obj) => obj.value > max.value ? obj : max, chartData[0]);
-    const prevWeekUsage = Math.floor(totalUsage * (0.9 + Math.random() * 0.2)); // Mock previous week
+    const prevWeekUsage = Math.floor(totalUsage * 0.92); // Deterministic mock previous week
     const usageTrend = Math.floor(((totalUsage - prevWeekUsage) / prevWeekUsage) * 100);
 
     return (

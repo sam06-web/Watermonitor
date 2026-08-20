@@ -15,9 +15,6 @@ export class AiAnalysisService {
       return value != null && Number.isFinite(numeric) ? numeric : fallback;
     };
 
-    const {
-      riverName = 'River'
-    } = metrics;
     const ndwi = clean(metrics.ndwi, 0.5);
     const ndvi = clean(metrics.ndvi, 0.6);
     const waterArea = clean(metrics.waterArea, 50.0);

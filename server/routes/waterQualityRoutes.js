@@ -8,7 +8,7 @@ router.get('/health', async (_req, res) => {
     const response = await fetch(`${config.ml.url}/health`);
     const data = await response.json();
     res.status(response.status).json(data);
-  } catch (error) {
+  } catch {
     res.status(503).json({ status: 'unavailable', model_loaded: false, error: 'Python model service is unavailable' });
   }
 });

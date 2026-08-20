@@ -13,7 +13,7 @@ export class BaseSatelliteProvider {
    * @param {Object} params - { bbox, lat, lng, startDate, endDate, maxCloudCover }
    * @returns {Promise<Array>} List of scenes
    */
-  async searchScenes(params) {
+  async searchScenes(_params) {
     throw new Error(`searchScenes() not implemented in ${this.name}`);
   }
 
@@ -22,7 +22,7 @@ export class BaseSatelliteProvider {
    * @param {Object} river - { id, name, latitude, longitude, bbox }
    * @returns {Promise<Object|null>}
    */
-  async getLatestObservation(river) {
+  async getLatestObservation(_river) {
     throw new Error(`getLatestObservation() not implemented in ${this.name}`);
   }
 

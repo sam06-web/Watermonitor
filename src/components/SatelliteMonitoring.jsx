@@ -115,8 +115,9 @@ export default function SatelliteMonitoring({ onShowToast, selectedWaterBodyId =
         });
       }
     } finally {
-      if (requestId !== loadRequestRef.current) return;
-      setIsLoading(false);
+      if (requestId === loadRequestRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 

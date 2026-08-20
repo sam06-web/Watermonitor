@@ -8,7 +8,7 @@ function Status({ status }) {
   return <span className={`quality-status ${status}`}><span />{label}</span>;
 }
 
-export default function EcoDashboard({ realTimeData = {}, waterQuality = {}, satelliteObservation, satelliteRiver, contaminationPoints = [], modelPrediction, modelStatus = 'idle', onNavigate, onShowToast }) {
+export default function EcoDashboard({ realTimeData = {}, waterQuality = {}, satelliteObservation, satelliteRiver, contaminationPoints = [], modelPrediction, modelStatus = 'idle', onNavigate }) {
   const getSensorValue = value => {
     const numericValue = Number(value);
     return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : null;
@@ -31,13 +31,9 @@ export default function EcoDashboard({ realTimeData = {}, waterQuality = {}, sat
       };
     }
     return analyzeContamination({ ...values, satellite: satelliteObservation });
-  }, [hasLiveSensorData, values.ph, values.turbidity, values.tds, satelliteObservation]);
+  }, [values, hasLiveSensorData, satelliteObservation]);
   const latestEvent = contaminationPoints[contaminationPoints.length - 1];
   const satelliteRisk = satelliteObservation?.pollutionRisk || 'Not evaluated';
-
-  const handleDemoAlert = () => {
-    onShowToast?.({ title: 'Use a sensor simulator', message: 'Publish a payload containing lat, lng, ph, tds_ppm, and turbidity to create a mapped quality event.', type: 'info' });
-  };
 
   return (
     <div className="quality-dashboard">

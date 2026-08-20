@@ -1,4 +1,3 @@
-import axios from 'axios';
 import BaseSatelliteProvider from './baseProvider.js';
 import config from '../../config/config.js';
 

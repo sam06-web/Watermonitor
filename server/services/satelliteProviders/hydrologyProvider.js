@@ -47,7 +47,6 @@ export class HydrologyProvider {
         const c = res.data.current || {};
         const surfaceTemp = c.surface_temperature ?? c.temperature_2m ?? null;
         const dailyMax = res.data.daily?.temperature_2m_max?.[0] ?? null;
-        const dailyMin = res.data.daily?.temperature_2m_min?.[0] ?? null;
         const rain = res.data.daily?.precipitation_sum?.[0] ?? null;
         const isSurfaceValid = surfaceTemp != null && Number.isFinite(Number(surfaceTemp));
         const isDailyValid = dailyMax != null && Number.isFinite(Number(dailyMax));

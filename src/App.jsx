@@ -336,13 +336,6 @@ function App() {
     }
   }, [pipes]);
 
-  // Function to clear MQTT overrides (useful for troubleshooting)
-  const resetMqttConfig = () => {
-    localStorage.removeItem('mqtt-broker');
-    localStorage.removeItem('mqtt-topic');
-    window.location.reload();
-  };
-
   return (
     <div className={`eco-mobile-frame ${darkMode ? 'dark-mode' : ''}`}>
       {/* Top Header Bar matching EcoSync reference */}

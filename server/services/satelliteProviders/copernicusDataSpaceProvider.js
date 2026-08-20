@@ -45,7 +45,7 @@ export class CopernicusDataSpaceProvider extends BaseSatelliteProvider {
     }
   }
 
-  async searchScenes({ bbox, lat, lng, limit = 5 }) {
+  async searchScenes({ bbox: _bbox, lat, lng, limit = 5 }) {
     const token = await this.getAuthToken();
     if (!token) return [];
 

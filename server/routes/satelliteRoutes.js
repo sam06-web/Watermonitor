@@ -425,7 +425,8 @@ async function persistRealObservation(river, real, bbox, { enrichment = 'live' }
     }
     return;
   }
-const imageUrls = writeCachedImages(river.id, sceneDate, real.images || {});
+
+  const imageUrls = writeCachedImages(river.id, sceneDate, real.images || {});
 
   const prevDate = new Date(sceneDate);
   prevDate.setDate(prevDate.getDate() - 15);
@@ -584,7 +585,7 @@ router.get('/image', (req, res) => {
     return res.sendFile(cachedFile);
   }
 
-  const escapeXml = value => String(value).replace(/[<>&'\"]/g, character => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[character]));
+  const escapeXml = value => String(value).replace(/[<>&'"]/g, character => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[character]));
   const riverLabel = escapeXml(riverQuery);
   const dateLabel = escapeXml(dateStr);
 

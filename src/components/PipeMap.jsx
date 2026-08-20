@@ -132,12 +132,12 @@ const PipeMap = ({ pipes, setPipes, leakagePoints, contaminationPoints = [], cle
             });
 
             // Hover effect for eraser
-            polyline.on('mouseover', function (e) {
+            polyline.on('mouseover', function () {
                 if (isErasingRef.current) {
                     this.setStyle({ color: 'red', weight: 6 });
                 }
             });
-            polyline.on('mouseout', function (e) {
+            polyline.on('mouseout', function () {
                 if (isErasingRef.current) {
                     this.setStyle({ color: '#ff5252', weight: 4 });
                 } else {
