@@ -328,36 +328,43 @@ export default function RiverMap({ riverData, onAreaScanned }) {
   };
 
   return (
-    <div className="sat-map-container-card glass-card" style={{ marginBottom: '1.5rem', padding: '0', overflow: 'hidden' }}>
-      <div className="sat-map-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span style={{ fontSize: '1.1rem' }}>🗺️</span>
+    <div className="sat-map-container-card glass-card" style={{ marginBottom: '2rem', padding: '0', overflow: 'hidden' }}>
+      <div className="sat-map-header" style={{ padding: '1.75rem 2rem', borderBottom: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <span style={{ fontSize: '1.6rem' }}>🗺️</span>
           <div>
+<<<<<<< HEAD
+            <h2 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.3rem', fontWeight: '800' }}>
+              {riverData?.name || 'River'} Dynamic Satellite Map
+            </h2>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+=======
             <strong style={{ color: 'var(--text-primary)', fontSize: '0.95rem' }}>
               {riverData?.name ? `${riverData.name} — Dynamic Satellite Map` : 'Satellite Map'}
             </strong>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+>>>>>>> origin/main
               MapLibre GL • Vector Reach Highlighting • Multi-Layer Toggle
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
           <button
-            className={`sat-map-btn ${scanMode ? 'active' : ''}`}
+            className={`btn sat-map-action-btn ${scanMode ? 'btn-primary active' : ''}`}
             onClick={toggleScanMode}
             title="Drag a rectangle on the map to run a real Sentinel-2 scan over that area"
           >
             🎯 Scan Area
           </button>
           <button
-            className={`sat-map-btn ${mapLayer === 'satellite' ? 'active' : ''}`}
+            className={`btn sat-map-action-btn ${mapLayer === 'satellite' ? 'btn-primary active' : ''}`}
             onClick={() => handleLayerToggle('satellite')}
           >
             🛰️ High-Res Satellite
           </button>
           <button
-            className={`sat-map-btn ${mapLayer === 'ndwi' ? 'active' : ''}`}
+            className={`btn sat-map-action-btn ${mapLayer === 'ndwi' ? 'btn-primary active' : ''}`}
             onClick={() => handleLayerToggle('ndwi')}
           >
             🌊 Water Mask (NDWI)
@@ -366,14 +373,14 @@ export default function RiverMap({ riverData, onAreaScanned }) {
       </div>
 
       <div style={{ position: 'relative' }}>
-        <div ref={mapContainerRef} style={{ width: '100%', height: '420px', background: '#0b1120' }} />
+        <div ref={mapContainerRef} style={{ width: '100%', height: '460px', background: '#0b1120' }} />
 
         {scanMode && !scanPreview && (
           <div className="glass" style={{
-            position: 'absolute', bottom: '10px', left: '50%', transform: 'translateX(-50%)',
-            padding: '6px 12px', borderRadius: '999px', fontSize: '0.78rem',
-            color: 'var(--text-secondary)', pointerEvents: 'none', whiteSpace: 'nowrap',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.4)'
+            position: 'absolute', bottom: '15px', left: '50%', transform: 'translateX(-50%)',
+            padding: '8px 16px', borderRadius: '999px', fontSize: '0.85rem', fontWeight: '600',
+            color: 'var(--text-primary)', pointerEvents: 'none', whiteSpace: 'nowrap',
+            boxShadow: '0 6px 20px rgba(0,0,0,0.5)'
           }}>
             Drag on the map to draw a rectangle, then release to scan that area
           </div>
@@ -381,18 +388,18 @@ export default function RiverMap({ riverData, onAreaScanned }) {
 
         {scanPreview && (
           <div className="glass" style={{
-            position: 'absolute', bottom: '10px', left: '50%', transform: 'translateX(-50%)',
-            display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '8px 12px',
-            borderRadius: '12px', boxShadow: '0 6px 24px rgba(0,0,0,0.5)', zIndex: 5
+            position: 'absolute', bottom: '15px', left: '50%', transform: 'translateX(-50%)',
+            display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '10px 16px',
+            borderRadius: '14px', boxShadow: '0 8px 28px rgba(0,0,0,0.6)', zIndex: 15
           }}>
             <input
               value={scanName}
               onChange={e => setScanName(e.target.value)}
               placeholder="Name this area (optional)"
               style={{
-                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
-                color: 'var(--text-primary)', borderRadius: '8px', padding: '6px 10px',
-                fontSize: '0.8rem', width: '180px'
+                background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)',
+                color: 'var(--text-primary)', borderRadius: '10px', padding: '8px 12px',
+                fontSize: '0.85rem', width: '200px'
               }}
             />
             <button
@@ -408,20 +415,20 @@ export default function RiverMap({ riverData, onAreaScanned }) {
             </button>
           </div>
         )}
-      </div>
 
-      <div className="sat-map-legend glass">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-          <div style={{ width: '16px', height: '4px', background: '#00f0ff', borderRadius: '2px', boxShadow: '0 0 8px #00f0ff' }}></div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Delineated River Reach</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <div style={{ width: '16px', height: '4px', background: '#38bdf8', borderRadius: '2px' }}></div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Primary Water Flow</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
-          <div style={{ width: '16px', height: '4px', background: '#22d3ee', borderRadius: '2px', border: '1px dashed rgba(255,255,255,0.6)' }}></div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Scanned Area</span>
+        <div className="sat-map-legend glass">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.4rem' }}>
+            <div style={{ width: '18px', height: '5px', background: '#00f0ff', borderRadius: '3px', boxShadow: '0 0 8px #00f0ff' }}></div>
+            <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)' }}>Delineated River Reach</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.4rem' }}>
+            <div style={{ width: '18px', height: '5px', background: '#38bdf8', borderRadius: '3px' }}></div>
+            <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)' }}>Primary Water Flow</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <div style={{ width: '18px', height: '5px', background: '#22d3ee', borderRadius: '3px', border: '1px dashed rgba(255,255,255,0.8)' }}></div>
+            <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)' }}>Scanned Area</span>
+          </div>
         </div>
       </div>
     </div>
