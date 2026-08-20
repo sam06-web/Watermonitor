@@ -55,7 +55,7 @@ class _TTLCache(dict):
 PROCESS_CACHE = _TTLCache(6 * 60 * 60)
 
 
-def _search_stac(bbox, start, end, max_cloud, limit=12, ascending=False, max_pages=1):
+def _search_stac(bbox, start, end, max_cloud, limit=25, ascending=False, max_pages=1):
     """Search Sentinel-2 L2A scenes over a bbox, trying Planetary Computer then Earth Search."""
     payload = lambda page: {
         'collections': ['sentinel-2-l2a'],
@@ -369,7 +369,7 @@ def process():
             'source': 'unavailable',
             'error': 'No Sentinel-2 scenes found over the requested area within the cloud-cover limit'
         }
-        PROCESS_CACHE.set(cache_key, result)
+        # Do NOT cache failures — let the next request retry STAC immediately
         return jsonify(result), 404
 
     best = _pick_best_scene(features, bbox)
@@ -378,7 +378,7 @@ def process():
             'source': 'unavailable',
             'error': 'No overlapping scene found for the requested water body'
         }
-        PROCESS_CACHE.set(cache_key, result)
+        # Do NOT cache failures
         return jsonify(result), 404
 
     result = _process_scene(best, best['scene']['assets'], bbox, max_cloud)
@@ -387,7 +387,7 @@ def process():
             'source': 'unavailable',
             'error': 'Failed to read spectral bands for the selected scene'
         }
-        PROCESS_CACHE.set(cache_key, result)
+        # Do NOT cache failures
         return jsonify(result), 502
 
     PROCESS_CACHE.set(cache_key, result)

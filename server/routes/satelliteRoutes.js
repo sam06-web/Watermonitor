@@ -368,16 +368,16 @@ async function refreshRiverObservation(river) {
   }
   if (!Array.isArray(bbox) || bbox.length !== 4) {
     bbox = [
-      Number(river.longitude) - 0.3,
-      Number(river.latitude) - 0.3,
-      Number(river.longitude) + 0.3,
-      Number(river.latitude) + 0.3
+      Number(river.longitude) - 0.5,
+      Number(river.latitude) - 0.5,
+      Number(river.longitude) + 0.5,
+      Number(river.latitude) + 0.5
     ];
   }
   bbox = clampBbox(bbox, Number(river.latitude), Number(river.longitude));
 
   const end = new Date().toISOString().split('T')[0];
-  const start = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const start = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   let real;
   try {
@@ -390,7 +390,7 @@ async function refreshRiverObservation(river) {
         bbox,
         lat: Number(river.latitude),
         lng: Number(river.longitude),
-        max_cloud: 60,
+        max_cloud: 80,
         start,
         end
       }),
