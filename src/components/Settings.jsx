@@ -52,54 +52,60 @@ const Settings = ({ setPipes, testNotification, notifications, setNotifications,
 
                 {/* MQTT Configuration Card */}
                 <div className="glass-card">
-                    <h2 style={{ marginBottom: '1rem', color: 'var(--primary-blue-light)' }}>Connection Settings</h2>
+                    <h2 style={{ marginBottom: '1rem', color: 'var(--eco-text-main)', fontSize: '1.2rem', fontWeight: '800' }}>Connection Settings</h2>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                         <div>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Broker URL (WebSocket)</label>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem', fontWeight: '600' }}>Broker URL (WebSocket)</label>
                             <input
                                 type="text"
                                 value={brokerUrl}
                                 onChange={(e) => setBrokerUrl(e.target.value)}
                                 placeholder="ws://broker.hivemq.com:8000/mqtt"
+                                className="settings-input"
                                 style={{
-                                    width: '100%', padding: '0.75rem', borderRadius: '8px',
-                                    border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)'
+                                    width: '100%', padding: '0.75rem 1rem', borderRadius: '12px',
+                                    border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                                    fontWeight: '500', outline: 'none'
                                 }}
                             />
                         </div>
                         <div>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>MQTT Topic</label>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem', fontWeight: '600' }}>MQTT Topic</label>
                             <input
                                 type="text"
                                 value={topic}
                                 onChange={(e) => setTopic(e.target.value)}
                                 placeholder="water/meter/data"
+                                className="settings-input"
                                 style={{
-                                    width: '100%', padding: '0.75rem', borderRadius: '8px',
-                                    border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)'
+                                    width: '100%', padding: '0.75rem 1rem', borderRadius: '12px',
+                                    border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                                    fontWeight: '500', outline: 'none'
                                 }}
                             />
                         </div>
                         <div>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Gemini API Key</label>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem', fontWeight: '600' }}>Gemini API Key</label>
                             <input
                                 type="password"
                                 value={geminiApiKey}
                                 onChange={(e) => setGeminiApiKey(e.target.value)}
                                 placeholder="Enter your Gemini API Key"
+                                className="settings-input"
                                 style={{
-                                    width: '100%', padding: '0.75rem', borderRadius: '8px',
-                                    border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)'
+                                    width: '100%', padding: '0.75rem 1rem', borderRadius: '12px',
+                                    border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                                    fontWeight: '500', outline: 'none'
                                 }}
                             />
-                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                                Leave empty to use the default environment key if available.
+                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                                Leave empty to use default environment key if available.
                             </p>
                         </div>
                         <button
                             onClick={handleSaveConfig}
                             className="btn btn-primary"
-                            style={{ justifyContent: 'center', marginTop: '0.5rem' }}
+                            style={{ justifyContent: 'center', marginTop: '0.5rem', padding: '0.85rem 1.5rem', borderRadius: '12px' }}
                         >
                             💾 Save & Connect
                         </button>
@@ -108,83 +114,63 @@ const Settings = ({ setPipes, testNotification, notifications, setNotifications,
 
                 {/* Mock Data Control Card */}
                 <div className="glass-card">
-                    <h2 style={{ marginBottom: '1rem', color: 'var(--primary-blue-light)' }}>Mock Data Controls</h2>
+                    <h2 style={{ marginBottom: '1rem', color: 'var(--eco-text-main)', fontSize: '1.2rem', fontWeight: '800' }}>Mock Data Controls</h2>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                         <button
                             onClick={resetPipes}
                             className="btn btn-primary"
-                            style={{ justifyContent: 'center' }}
+                            style={{ justifyContent: 'center', padding: '0.85rem 1.5rem', borderRadius: '12px' }}
                         >
                             🔄 Reset Pipe Network
                         </button>
                         <button
                             onClick={clearPipes}
-                            className="btn"
-                            style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', justifyContent: 'center', border: '1px solid #ef4444' }}
+                            className="btn btn-danger-soft"
+                            style={{ justifyContent: 'center', padding: '0.85rem 1.5rem', borderRadius: '12px' }}
                         >
                             🗑️ Clear All Pipes
                         </button>
                         <button
                             onClick={simulateLeak}
-                            className="btn"
-                            style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', justifyContent: 'center', border: '1px solid #f59e0b' }}
+                            className="btn btn-warning-soft"
+                            style={{ justifyContent: 'center', padding: '0.85rem 1.5rem', borderRadius: '12px' }}
                         >
                             ⚠️ Simulate Leakage Event
                         </button>
                     </div>
                 </div>
 
-                {/* General Settings Card */}
+                {/* General Preferences Card */}
                 <div className="glass-card">
-                    <h2 style={{ marginBottom: '1rem', color: 'var(--primary-blue-light)' }}>General Preferences</h2>
+                    <h2 style={{ marginBottom: '1rem', color: 'var(--eco-text-main)', fontSize: '1.2rem', fontWeight: '800' }}>General Preferences</h2>
 
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                         <div>
-                            <h3 style={{ fontSize: '1rem', color: 'var(--text-primary)' }}>High Severity Alerts</h3>
-                            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Receive notifications for critical leaks</p>
+                            <h3 style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '700' }}>High Severity Alerts</h3>
+                            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>Receive notifications for critical leaks</p>
                         </div>
-                        <label style={{ position: 'relative', display: 'inline-block', width: '50px', height: '26px' }}>
+                        <label className="toggle-switch">
                             <input
                                 type="checkbox"
                                 checked={notifications}
                                 onChange={() => setNotifications(!notifications)}
-                                style={{ opacity: 0, width: 0, height: 0 }}
                             />
-                            <span style={{
-                                position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
-                                backgroundColor: notifications ? 'var(--primary-blue)' : '#4b5563',
-                                transition: '.4s', borderRadius: '34px'
-                            }}></span>
-                            <span style={{
-                                position: 'absolute', content: '""', height: '20px', width: '20px', left: '3px', bottom: '3px',
-                                backgroundColor: 'white', transition: '.4s', borderRadius: '50%',
-                                transform: notifications ? 'translateX(24px)' : 'translateX(0)'
-                            }}></span>
+                            <span className="toggle-slider"></span>
                         </label>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div>
-                            <h3 style={{ fontSize: '1rem', color: 'var(--text-primary)' }}>Dark Mode</h3>
-                            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Toggle application theme</p>
+                            <h3 style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '700' }}>Dark Mode</h3>
+                            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>Toggle application theme</p>
                         </div>
-                        <label style={{ position: 'relative', display: 'inline-block', width: '50px', height: '26px' }}>
+                        <label className="toggle-switch">
                             <input
                                 type="checkbox"
                                 checked={darkMode}
                                 onChange={() => setDarkMode(!darkMode)}
-                                style={{ opacity: 0, width: 0, height: 0 }}
                             />
-                            <span style={{
-                                position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
-                                backgroundColor: darkMode ? 'var(--primary-blue)' : '#4b5563',
-                                transition: '.4s', borderRadius: '34px'
-                            }}></span>
-                            <span style={{
-                                position: 'absolute', content: '""', height: '20px', width: '20px', left: '3px', bottom: '3px',
-                                backgroundColor: 'white', transition: '.4s', borderRadius: '50%',
-                                transform: darkMode ? 'translateX(24px)' : 'translateX(0)'
-                            }}></span>
+                            <span className="toggle-slider"></span>
                         </label>
                     </div>
                 </div>

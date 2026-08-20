@@ -25,13 +25,13 @@ export default function HistoryChart({ riverData, historyData, statistics, histo
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap', alignItems: 'center' }}>
           {PERIODS.map(p => (
             <button
               key={p.id}
               onClick={() => onPeriodChange(p.id)}
               className={`sat-chip ${historyPeriod === p.id ? 'active' : ''}`}
-              style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+              style={{ padding: '0.55rem 1.1rem', fontSize: '0.9rem', fontWeight: '700' }}
             >
               {p.label}
             </button>
@@ -39,12 +39,13 @@ export default function HistoryChart({ riverData, historyData, statistics, histo
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '0.85rem', marginTop: '1.25rem', marginBottom: '1.85rem', flexWrap: 'wrap', alignItems: 'center' }}>
         {METRICS.map(metric => (
           <button
             key={metric.id}
             onClick={() => onMetricChange(metric.id)}
             className={`sat-metric-tab ${activeChartMetric === metric.id ? 'active' : ''}`}
+            style={{ padding: '0.65rem 1.25rem', fontSize: '0.9rem' }}
           >
             {metric.label}
           </button>
