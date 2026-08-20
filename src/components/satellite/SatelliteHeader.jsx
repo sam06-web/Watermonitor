@@ -1,6 +1,6 @@
 import RiverSearch from './RiverSearch';
 
-export default function SatelliteHeader({ isRefreshing, isLoading, onRefresh, onSelectRiver }) {
+export default function SatelliteHeader({ isRefreshing, isLoading, hasRiver, onRefresh, onSelectRiver }) {
   return (
     <div className="sat-header-section glass-card" style={{ marginBottom: '1.5rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
@@ -27,13 +27,15 @@ export default function SatelliteHeader({ isRefreshing, isLoading, onRefresh, on
           <button
             className={`btn btn-primary ${isRefreshing ? 'sat-btn-spinning' : ''}`}
             onClick={onRefresh}
-            disabled={isRefreshing || isLoading}
+            disabled={isRefreshing || isLoading || !hasRiver}
+            title={!hasRiver ? 'Search for a water body first' : 'Fetch the latest satellite pass'}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '0.5rem',
               padding: '0.6rem 1.2rem',
-              fontSize: '0.9rem'
+              fontSize: '0.9rem',
+              opacity: !hasRiver ? 0.45 : 1
             }}
           >
             <svg

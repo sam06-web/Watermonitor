@@ -13,7 +13,7 @@ export default function SatelliteMonitoring({ onShowToast, observation, riverDat
   const [historyPeriod, setHistoryPeriod] = useState('30d');
   const [activeChartMetric, setActiveChartMetric] = useState('waterArea');
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);  // starts false — no river selected yet
   const historyRequestRef = useRef(0);
 
   const loadHistory = async (riverId, period) => {
@@ -102,27 +102,56 @@ export default function SatelliteMonitoring({ onShowToast, observation, riverDat
       <SatelliteHeader
         isRefreshing={isRefreshing}
         isLoading={isLoading}
+        hasRiver={!!riverData}
         onRefresh={handleRefresh}
         onSelectRiver={handleSelectRiver}
       />
 
+      {/* Empty state — shown until user searches and selects a water body */}
+      {!riverData && !observation && (
+        <div className="glass-card" style={{
+          margin: '0 0 1.5rem',
+          padding: '3rem 2rem',
+          textAlign: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '1rem'
+        }}>
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" opacity="0.6">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <div>
+            <p style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
+              Search for a water body to begin
+            </p>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
+              Type any river, lake, or reservoir name above — global coverage via Sentinel-2 satellite imagery.
+            </p>
+          </div>
+        </div>
+      )}
+
       {observation && <ObservationBanner observation={observation} />}
 
-      <RiverMap riverData={riverData} onAreaScanned={onAreaScanned} />
+      {riverData && <RiverMap riverData={riverData} onAreaScanned={onAreaScanned} />}
 
       {observation && <MetricsGrid observation={observation} />}
 
-      <ImageViewer riverData={riverData} observation={observation} onShowToast={onShowToast} />
+      {riverData && <ImageViewer riverData={riverData} observation={observation} onShowToast={onShowToast} />}
 
-      <HistoryChart
-        riverData={riverData}
-        historyData={historyData}
-        statistics={statistics}
-        historyPeriod={historyPeriod}
-        onPeriodChange={setHistoryPeriod}
-        activeChartMetric={activeChartMetric}
-        onMetricChange={setActiveChartMetric}
-      />
+      {riverData && (
+        <HistoryChart
+          riverData={riverData}
+          historyData={historyData}
+          statistics={statistics}
+          historyPeriod={historyPeriod}
+          onPeriodChange={setHistoryPeriod}
+          activeChartMetric={activeChartMetric}
+          onMetricChange={setActiveChartMetric}
+        />
+      )}
 
       {observation && <AiInsights observation={observation} />}
     </div>

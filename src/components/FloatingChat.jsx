@@ -32,9 +32,6 @@ const FloatingChat = ({
     }, [open]);
 
     const getSystemPrompt = () => {
-        const flow1 = realTimeData.flow1 || 0;
-        const flow2 = realTimeData.flow2 || 0;
-        const leak = realTimeData.leak || (flow1 > flow2 ? flow1 - flow2 : 0);
         const waterBody = satelliteRiver?.name || 'the monitored water body';
 
         let contaminationContext = 'No active contamination events detected.';
@@ -51,15 +48,11 @@ const FloatingChat = ({
         return `You are AquaSense, an expert AI assistant for a water management and pollution monitoring system.
 Your role is to analyze pollution detected by IoT sensors and satellite imagery, explain the cause, and give concrete, actionable remediation steps.
 
-CURRENT LIVE SYSTEM DATA CONTEXT:
+CURRENT LIVE SENSOR DATA:
 - Water body: ${waterBody}
-- Inlet Flow Rate: ${flow1.toFixed ? flow1.toFixed(2) : flow1} L/min
-- Outlet Flow Rate: ${flow2.toFixed ? flow2.toFixed(2) : flow2} L/min
-- Leakage Rate: ${Number(leak).toFixed(2)} L/min
+- pH Level: ${waterQuality.ph || 'N/A'}
+- Turbidity: ${waterQuality.turbidity || 'N/A'} NTU
 - TDS (Total Dissolved Solids): ${realTimeData.tds || 'N/A'} ppm
-- pH Level: ${waterQuality.ph ?? 'N/A'}
-- Turbidity: ${waterQuality.turbidity ?? 'N/A'} NTU
-- System Status: ${Math.abs(leak) > leakThreshold ? 'CRITICAL LEAK DETECTED' : 'Normal Operations'}
 
 SATELLITE CONTEXT:
 - Pollution risk: ${pollutionRisk}
@@ -117,7 +110,8 @@ Be concise, professional, and helpful. If no data is available, say so and sugge
                     "X-Title": "AquaSense Water Management App",
                 },
                 body: JSON.stringify({
-                    model: "google/gemini-2.0-flash-001",
+                    model: "google/gemini-2.5-flash",
+                    max_tokens: 1024,
                     messages: [
                         { role: "system", content: getSystemPrompt() },
                         ...history,

@@ -38,7 +38,6 @@ function App() {
   const [contaminationPoints, setContaminationPoints] = useState([]);
   const [satelliteObservation, setSatelliteObservation] = useState(null);
   const [satelliteRiver, setSatelliteRiver] = useState(null);
-  const [selectedSatelliteWaterBody, setSelectedSatelliteWaterBody] = useState('cauvery');
   const [modelPrediction, setModelPrediction] = useState(null);
   const [modelStatus, dispatchModelStatus] = useReducer(modelStatusReducer, 'idle');
 
@@ -63,11 +62,11 @@ function App() {
     satelliteObservationRef.current = satelliteObservation;
   }, [satelliteObservation]);
 
-  // Satellite observations are intentionally loaded independently from MQTT.
-  // Sensors provide continuous readings while Sentinel observations validate spatial conditions periodically.
-  useEffect(() => {
+  // Satellite observations are loaded on demand when the user selects a water body.
+  // Nothing is fetched on mount — the satellite view starts empty until searched.
+  const fetchSatelliteData = (riverId) => {
     const controller = new AbortController();
-    fetch(`/api/satellite/latest?river=${encodeURIComponent(selectedSatelliteWaterBody)}`, { signal: controller.signal })
+    fetch(`/api/satellite/latest?river=${encodeURIComponent(riverId)}`, { signal: controller.signal })
       .then(response => response.json())
       .then(data => {
         if (data.success) {
@@ -88,18 +87,17 @@ function App() {
             }]);
           }
         } else if (data.river) {
-          // No observation yet for this water body (e.g. freshly searched);
-          // still expose the river so the satellite view can map it.
+          // River found but no observation yet — show the river on the map
+          // and wait for the satellite pipeline to complete.
           setSatelliteRiver(data.river);
           setSatelliteObservation(null);
         }
       })
       .catch(error => {
         if (error.name === 'AbortError') return;
-        // The sensor dashboard remains available when the satellite service is offline.
       });
-    return () => controller.abort();
-  }, [selectedSatelliteWaterBody]);
+    return controller;
+  };
 
   // Ask the Python model for a prediction whenever a complete sensor sample changes.
   useEffect(() => {
@@ -334,7 +332,7 @@ function App() {
               observation={satelliteObservation}
               riverData={satelliteRiver}
               onObservationChange={setSatelliteObservation}
-              onWaterBodyChange={setSelectedSatelliteWaterBody}
+              onWaterBodyChange={(riverId) => fetchSatelliteData(riverId)}
               onAreaScanned={handleAreaScanned}
               onShowToast={(toast) => setNotifications(prev => [...prev, { id: Date.now(), ...toast }])}
             />

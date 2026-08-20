@@ -78,8 +78,8 @@ export default function RiverMap({ riverData, onAreaScanned }) {
           }
         ]
       },
-      center: [78.583, 11.137],
-      zoom: 7.5,
+      center: [78.0, 20.0],
+      zoom: 3,
       pitch: 25,
       bearing: 0,
       attributionControl: false
@@ -334,7 +334,7 @@ export default function RiverMap({ riverData, onAreaScanned }) {
           <span style={{ fontSize: '1.1rem' }}>🗺️</span>
           <div>
             <strong style={{ color: 'var(--text-primary)', fontSize: '0.95rem' }}>
-              {riverData?.name || 'River'} Dynamic Satellite Map
+              {riverData?.name ? `${riverData.name} — Dynamic Satellite Map` : 'Satellite Map'}
             </strong>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
               MapLibre GL • Vector Reach Highlighting • Multi-Layer Toggle
