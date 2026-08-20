@@ -1,27 +1,35 @@
 import { useEffect, useRef, useState } from 'react';
 
 export default function RiverSearch({ onSelectRiver }) {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [inputValue, setInputValue] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  // Tracks whether the current input value came from a selection (not user typing).
+  // When true, the search effect is skipped so selecting a river doesn't re-trigger a query.
+  const selectedRef = useRef(false);
   const searchInputRef = useRef(null);
 
   useEffect(() => {
-    if (!searchQuery.trim()) {
+    // Skip the search if this change was caused by a selection, not user typing.
+    if (selectedRef.current) {
+      selectedRef.current = false;
+      return;
+    }
+
+    if (!inputValue.trim()) {
       setSearchResults([]);
       setShowDropdown(false);
       return;
     }
 
     let cancelled = false;
-    // 400ms debounce — avoids firing on every keystroke
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const res = await fetch(`/api/satellite/search?river=${encodeURIComponent(searchQuery)}`);
+        const res = await fetch(`/api/satellite/search?river=${encodeURIComponent(inputValue)}`);
         const data = await res.json();
-        if (data.success && !cancelled) {
+        if (!cancelled && data.success) {
           setSearchResults(data.rivers || []);
           setShowDropdown(true);
         }
@@ -36,7 +44,25 @@ export default function RiverSearch({ onSelectRiver }) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [searchQuery]);
+  }, [inputValue]);
+
+  const handleSelect = (river) => {
+    // Mark as a programmatic change so the effect doesn't fire a new search.
+    selectedRef.current = true;
+    setInputValue('');
+    setSearchResults([]);
+    setShowDropdown(false);
+    onSelectRiver(river);
+    // Keep focus on input so the user can immediately search again.
+    searchInputRef.current?.focus();
+  };
+
+  const handleClear = () => {
+    setInputValue('');
+    setSearchResults([]);
+    setShowDropdown(false);
+    searchInputRef.current?.focus();
+  };
 
   return (
     <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -51,18 +77,13 @@ export default function RiverSearch({ onSelectRiver }) {
             type="text"
             className="sat-search-input"
             placeholder="Search any river or lake worldwide (e.g., Amazon, Lake Victoria, Ganga...)"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
             onFocus={() => { if (searchResults.length > 0) setShowDropdown(true); }}
           />
           {isSearching && <span className="sat-search-spinner"></span>}
-          {searchQuery && (
-            <button
-              className="sat-search-clear"
-              onClick={() => { setSearchQuery(''); setSearchResults([]); setShowDropdown(false); }}
-            >
-              ✕
-            </button>
+          {inputValue && (
+            <button className="sat-search-clear" onClick={handleClear}>✕</button>
           )}
         </div>
 
@@ -72,11 +93,7 @@ export default function RiverSearch({ onSelectRiver }) {
               <div
                 key={river.id}
                 className="sat-search-dropdown-item"
-                onClick={() => {
-                  setSearchQuery(river.name);
-                  setShowDropdown(false);
-                  onSelectRiver(river);
-                }}
+                onClick={() => handleSelect(river)}
               >
                 <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{river.name}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
