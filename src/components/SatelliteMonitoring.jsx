@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import SatelliteHeader from './satellite/SatelliteHeader';
-import ObservationBanner from './satellite/ObservationBanner';
 import RiverMap from './satellite/RiverMap';
 import MetricsGrid from './satellite/MetricsGrid';
 import ImageViewer from './satellite/ImageViewer';
@@ -12,8 +11,7 @@ export default function SatelliteMonitoring({ onShowToast, observation, riverDat
   const [historyData, setHistoryData] = useState([]);
   const [historyPeriod, setHistoryPeriod] = useState('30d');
   const [activeChartMetric, setActiveChartMetric] = useState('waterArea');
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);  // starts false — no river selected yet
+  const [isLoading, setIsLoading] = useState(false);
   const historyRequestRef = useRef(0);
 
   const loadHistory = async (riverId, period) => {
@@ -43,48 +41,12 @@ export default function SatelliteMonitoring({ onShowToast, observation, riverDat
       .finally(() => {
         if (!cancelled) setIsLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [riverData?.id]);
 
   useEffect(() => {
     if (riverData?.id) loadHistory(riverData.id, historyPeriod);
   }, [historyPeriod, riverData?.id]);
-
-  const handleRefresh = async () => {
-    if (isRefreshing || !riverData) return;
-    setIsRefreshing(true);
-
-    try {
-      const res = await fetch(`/api/satellite/refresh?river=${encodeURIComponent(riverData.id)}`, { method: 'POST' });
-      const data = await res.json();
-
-      if (data.success && data.observation) {
-        onObservationChange?.(data.observation);
-        await loadHistory(riverData.id, historyPeriod);
-
-        if (onShowToast) {
-          onShowToast({
-            title: 'Telemetry Refreshed',
-            message: `Retrieved latest ${data.observation.satellite_name || data.observation.satelliteName} observation.`,
-            type: 'success'
-          });
-        }
-      }
-    } catch (err) {
-      console.error('Refresh error:', err);
-      if (onShowToast) {
-        onShowToast({
-          title: 'Refresh Failed',
-          message: 'Could not fetch new satellite pass. Using cached observation.',
-          type: 'warning'
-        });
-      }
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
 
   const handleSelectRiver = (river) => {
     onWaterBodyChange?.(river.id);
@@ -99,13 +61,7 @@ export default function SatelliteMonitoring({ onShowToast, observation, riverDat
 
   return (
     <div className="satellite-monitoring-container">
-      <SatelliteHeader
-        isRefreshing={isRefreshing}
-        isLoading={isLoading}
-        hasRiver={!!riverData}
-        onRefresh={handleRefresh}
-        onSelectRiver={handleSelectRiver}
-      />
+      <SatelliteHeader onSelectRiver={handleSelectRiver} />
 
       {/* Empty state — shown until user searches and selects a water body */}
       {!riverData && !observation && (
@@ -132,8 +88,6 @@ export default function SatelliteMonitoring({ onShowToast, observation, riverDat
           </div>
         </div>
       )}
-
-      {observation && <ObservationBanner observation={observation} />}
 
       {riverData && <RiverMap riverData={riverData} onAreaScanned={onAreaScanned} />}
 
