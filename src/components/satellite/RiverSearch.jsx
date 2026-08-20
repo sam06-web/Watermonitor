@@ -15,6 +15,7 @@ export default function RiverSearch({ onSelectRiver }) {
     }
 
     let cancelled = false;
+    // 400ms debounce — avoids firing on every keystroke
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
@@ -29,7 +30,7 @@ export default function RiverSearch({ onSelectRiver }) {
       } finally {
         if (!cancelled) setIsSearching(false);
       }
-    }, 250);
+    }, 400);
 
     return () => {
       cancelled = true;
