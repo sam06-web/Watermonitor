@@ -36,7 +36,7 @@ const contaminationIcon = (severity = 'warning') => L.divIcon({
     popupAnchor: [0, -12]
 });
 
-const PipeMap = ({ pipes, setPipes, leakagePoints, contaminationPoints = [], clearLeakagePoints }) => {
+const PipeMap = ({ pipes = [], setPipes, leakagePoints = [], contaminationPoints = [], clearLeakagePoints }) => {
     const mapContainer = useRef(null);
     const mapInstance = useRef(null);
     const [isEditing, setIsEditing] = useState(false);

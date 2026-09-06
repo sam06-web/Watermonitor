@@ -95,9 +95,8 @@ export class RiverGeoService {
       let items = await fetchNominatim(trimmed);
       let results = parseItems(items);
 
-      // Second attempt only if plain query found nothing — no delay needed
-      // since we're not hitting the 1 req/s limit on a single sequential call.
       if (results.length === 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
         items = await fetchNominatim(`${trimmed} river`);
         results = parseItems(items);
       }

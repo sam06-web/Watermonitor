@@ -61,6 +61,34 @@ export default function Automations({ onShowToast }) {
     }));
   };
 
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newFlow, setNewFlow] = useState({ title: '', desc: '' });
+  const [formError, setFormError] = useState('');
+
+  const handleAddFlow = (e) => {
+    e.preventDefault();
+    if (!newFlow.title.trim() || !newFlow.desc.trim()) {
+      setFormError('Title and description are required.');
+      return;
+    }
+    setFlows(prev => [...prev, {
+      id: 'custom_' + Date.now(),
+      title: newFlow.title,
+      desc: newFlow.desc,
+      icon: '⚙️',
+      iconType: 'blue',
+      status: true,
+      subLeft: 'User Created',
+      subRight: 'ACTIVE'
+    }]);
+    setNewFlow({ title: '', desc: '' });
+    setShowAddForm(false);
+    setFormError('');
+    if (onShowToast) {
+      onShowToast({ title: 'Success', message: 'Automation rule added.', type: 'success' });
+    }
+  };
+
   return (
     <div style={{ padding: '0 1rem 1.5rem' }}>
       {/* 1. Header Section */}
@@ -101,19 +129,34 @@ export default function Automations({ onShowToast }) {
             className="eco-callout-btn"
             style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
             onClick={() => {
-              if (onShowToast) {
-                onShowToast({
-                  title: 'New Automation Flow',
-                  message: 'Flow creation wizard opened.',
-                  type: 'info'
-                });
-              }
+              setShowAddForm(!showAddForm);
+              setFormError('');
             }}
           >
-            <span>+</span> New Flow
+            <span>+</span> {showAddForm ? 'Cancel' : 'New Flow'}
           </button>
         </div>
       </div>
+
+      {showAddForm && (
+        <form onSubmit={handleAddFlow} style={{ background: 'var(--eco-card-bg)', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem', border: '1px solid var(--eco-card-border)' }}>
+          <h3 style={{ marginTop: 0, marginBottom: '1rem', color: 'var(--eco-text-main)' }}>Add Automation Rule</h3>
+          {formError && <div style={{ color: '#ef4444', marginBottom: '0.5rem', fontSize: '0.85rem' }}>{formError}</div>}
+          <input
+            placeholder="Rule Title"
+            value={newFlow.title}
+            onChange={e => setNewFlow(prev => ({ ...prev, title: e.target.value }))}
+            style={{ width: '100%', marginBottom: '0.5rem', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--eco-card-border)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+          />
+          <input
+            placeholder="Rule Description"
+            value={newFlow.desc}
+            onChange={e => setNewFlow(prev => ({ ...prev, desc: e.target.value }))}
+            style={{ width: '100%', marginBottom: '1rem', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--eco-card-border)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+          />
+          <button type="submit" className="btn btn-primary" style={{ padding: '0.5rem 1rem', borderRadius: '6px' }}>Save Rule</button>
+        </form>
+      )}
 
       {/* 2. Flow Automation Cards */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>

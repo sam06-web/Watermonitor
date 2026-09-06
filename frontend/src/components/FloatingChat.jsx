@@ -79,7 +79,7 @@ Be concise, professional, and helpful. If no data is available, say so and sugge
         '';
 
     const handleSend = async () => {
-        if (!input.trim()) return;
+        if (!input.trim() || isTyping) return;
 
         const effectiveApiKey = getEffectiveApiKey();
         if (!effectiveApiKey) {
@@ -110,7 +110,7 @@ Be concise, professional, and helpful. If no data is available, say so and sugge
                     "X-Title": "AquaSense Water Management App",
                 },
                 body: JSON.stringify({
-                    model: "google/gemini-2.5-flash",
+                    model: "google/gemini-2.0-flash-001",
                     max_tokens: 1024,
                     messages: [
                         { role: "system", content: getSystemPrompt() },

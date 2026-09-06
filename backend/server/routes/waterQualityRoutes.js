@@ -68,8 +68,9 @@ router.get('/health', async (_req, res) => {
 
 router.post('/predict', async (req, res) => {
   const { ph, tds, turbidity } = req.body || {};
-  if (![ph, tds, turbidity].every(value => Number.isFinite(Number(value)))) {
-    return res.status(400).json({ error: 'Provide numeric ph, tds, and turbidity values.' });
+  const isValidNumber = v => v != null && String(v).trim() !== '' && !isNaN(Number(v));
+  if (![ph, tds, turbidity].every(isValidNumber)) {
+    return res.status(400).json({ error: 'Provide valid numeric ph, tds, and turbidity values.' });
   }
 
   const numericSample = { ph: Number(ph), tds: Number(tds), turbidity: Number(turbidity) };
@@ -139,12 +140,13 @@ router.get('/sensor-history', async (req, res) => {
  * POST /api/water-quality/sensor-readings
  * Records a real-time sensor measurement to MongoDB Atlas
  */
-router.post('/sensor-readings', async (req, res) => {
+router.post(['/sensor-readings', '/readings/insert'], async (req, res) => {
   try {
     const { ph, tds, turbidity, temperature, riverId, riverName, source } = req.body || {};
 
-    if (![ph, tds, turbidity].every(v => Number.isFinite(Number(v)))) {
-      return res.status(400).json({ success: false, error: 'Provide numeric ph, tds, and turbidity values.' });
+    const isValidNumber = v => v != null && String(v).trim() !== '' && !isNaN(Number(v));
+    if (![ph, tds, turbidity].every(isValidNumber)) {
+      return res.status(400).json({ success: false, error: 'Provide valid numeric ph, tds, and turbidity values.' });
     }
 
     const saved = await RiverDB.insertSensorReading({

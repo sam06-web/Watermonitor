@@ -117,7 +117,7 @@ a:hover {
   position: fixed;
   top: 1.5rem;
   right: 1.5rem;
-  z-index: 10000;
+  z-index: 10001;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;

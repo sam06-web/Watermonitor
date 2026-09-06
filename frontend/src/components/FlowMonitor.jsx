@@ -68,9 +68,9 @@ const FlowMonitor = ({ realTimeData = {}, leakThreshold = 0.5 }) => {
                 </div>
 
                 <svg viewBox={`0 0 ${width} ${height}`} className="flow-svg" style={{ width: '100%', height: 'auto', overflow: 'visible' }}>
-                    {/* Grid lines */}
-                    <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="rgba(255,255,255,0.1)" />
-                    <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="rgba(255,255,255,0.1)" />
+                    {/* Grid lines - use currentColor for theme-aware rendering */}
+                    <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="var(--border-color)" strokeWidth="1" />
+                    <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="var(--border-color)" strokeWidth="1" />
 
                     {/* Fill Area */}
                     <path
@@ -107,23 +107,23 @@ const FlowMonitor = ({ realTimeData = {}, leakThreshold = 0.5 }) => {
     };
 
     return (
-        <div className="flow-monitor-container animate-fade-in">
-            <div className="metrics-grid" style={{ marginBottom: '2rem' }}>
+        <div style={{ animation: 'viewFadeIn 0.35s ease forwards', padding: '0 1rem 1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem', marginBottom: '2rem' }}>
                 <div className="metric-card">
-                    <span className="metric-label">Avg Inlet</span>
-                    <div className="metric-value" style={{ color: 'var(--accent-cyan)' }}>
+                    <span style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Avg Inlet</span>
+                    <div style={{ fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.02em', color: 'var(--accent-cyan)', marginTop: '0.3rem' }}>
                         {(history.flow1.reduce((a, b) => a + b.value, 0) / (history.flow1.length || 1)).toFixed(2)}
                     </div>
                 </div>
                 <div className="metric-card">
-                    <span className="metric-label">Avg Outlet</span>
-                    <div className="metric-value" style={{ color: 'var(--accent-teal)' }}>
+                    <span style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Avg Outlet</span>
+                    <div style={{ fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.02em', color: 'var(--accent-teal)', marginTop: '0.3rem' }}>
                         {(history.flow2.reduce((a, b) => a + b.value, 0) / (history.flow2.length || 1)).toFixed(2)}
                     </div>
                 </div>
                 <div className="metric-card">
-                    <span className="metric-label">Leak Status</span>
-                    <div className="metric-value" style={{ color: (Math.abs(realTimeData.leak) > leakThreshold) ? 'var(--danger-red)' : 'var(--success-green)' }}>
+                    <span style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Leak Status</span>
+                    <div style={{ fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.02em', color: (Math.abs(realTimeData.leak) > leakThreshold) ? '#ef4444' : '#10b981', marginTop: '0.3rem' }}>
                         {Math.abs(realTimeData.leak) > leakThreshold ? 'CRITICAL' : 'STABLE'}
                     </div>
                 </div>
@@ -132,7 +132,7 @@ const FlowMonitor = ({ realTimeData = {}, leakThreshold = 0.5 }) => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem' }}>
                 {renderLineChart(history.flow1, 'var(--accent-cyan)', 'Flow Meter 1 (Inlet)')}
                 {renderLineChart(history.flow2, 'var(--accent-teal)', 'Flow Meter 2 (Outlet)')}
-                {renderLineChart(history.leak, 'var(--danger-red)', 'Leakage Detection Rate')}
+                {renderLineChart(history.leak, '#ef4444', 'Leakage Detection Rate')}
             </div>
         </div>
     );

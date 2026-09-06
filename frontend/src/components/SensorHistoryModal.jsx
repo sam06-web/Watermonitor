@@ -48,7 +48,7 @@ export default function SensorHistoryModal({ isOpen, onClose, selectedRiver, cur
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          riverId: selectedRiver?.id || (filterRiver !== 'all' ? filterRiver : 'cauvery'),
+          riverId: selectedRiver?.id || (filterRiver !== 'all' ? filterRiver : 'global'),
           riverName: selectedRiver?.name || 'Monitored River',
           ph: Number(ph.toFixed(2)),
           tds: Math.round(tds),
@@ -216,6 +216,24 @@ export default function SensorHistoryModal({ isOpen, onClose, selectedRiver, cur
                 {recordSuccessMsg}
               </span>
             )}
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: '0.85rem', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              onClick={() => {
+                const header = 'Timestamp,Water Body,pH,TDS,Turbidity,WQI Score,Status\n';
+                const csv = historyData.map(row => 
+                  `${new Date(row.timestamp).toISOString()},${row.riverName || 'Global'},${row.ph},${row.tds},${row.turbidity},${row.wqi},${row.status}`
+                ).join('\n');
+                const blob = new Blob([header + csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'sensor_history.csv';
+                a.click();
+              }}
+            >
+              📥 Export CSV
+            </button>
             <button
               className="btn btn-primary"
               style={{ fontSize: '0.85rem', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}

@@ -79,6 +79,21 @@ function App() {
     satelliteObservationRef.current = satelliteObservation;
   }, [satelliteObservation]);
 
+  const handleWaterBodyChange = (riverIdOrObj, riverObj = null) => {
+    let id = riverIdOrObj;
+    let obj = riverObj;
+    if (typeof riverIdOrObj === 'object' && riverIdOrObj !== null) {
+      id = riverIdOrObj.id;
+      obj = riverIdOrObj;
+    }
+    if (obj) {
+      setSatelliteRiver(obj);
+    }
+    if (id) {
+      setSelectedSatelliteWaterBody(id);
+    }
+  };
+
   // Satellite observations are intentionally loaded independently from MQTT.
   // Sensors provide continuous readings while Sentinel observations validate spatial conditions periodically.
   // Only fetches when the user has actively selected a water body via search (null = no search yet).
@@ -234,6 +249,7 @@ function App() {
 
         try {
           const payload = JSON.parse(message.toString());
+          if (!payload || typeof payload !== 'object') return;
 
           // Expected hardware payload variants:
           // { ph/pH, turbidity/turb/ntu, tds_ppm/tds/TDS/ppm, temp/temperature, lat, lng }
@@ -367,6 +383,16 @@ function App() {
             </button>
 
             <button
+              className={`eco-nav-tab ${activeView === 'flow-monitor' ? 'active' : ''}`}
+              onClick={() => setActiveView('flow-monitor')}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+              <span>Flow</span>
+            </button>
+
+            <button
               className={`eco-nav-tab ${activeView === 'settings' ? 'active' : ''}`}
               onClick={() => setActiveView('settings')}
             >
@@ -412,7 +438,7 @@ function App() {
               modelPrediction={modelPrediction}
               modelStatus={modelStatus}
               onNavigate={setActiveView}
-              onWaterBodyChange={setSelectedSatelliteWaterBody}
+              onWaterBodyChange={handleWaterBodyChange}
               onShowToast={(t) => setNotifications(p => [...p, { id: Date.now(), ...t }])}
             />
           )}
@@ -423,7 +449,7 @@ function App() {
                 observation={satelliteObservation}
                 riverData={satelliteRiver}
                 onObservationChange={setSatelliteObservation}
-                onWaterBodyChange={setSelectedSatelliteWaterBody}
+                onWaterBodyChange={handleWaterBodyChange}
                 onAreaScanned={handleAreaScanned}
                 onShowToast={(toast) => setNotifications(prev => [...prev, { id: Date.now(), ...toast }])}
               />

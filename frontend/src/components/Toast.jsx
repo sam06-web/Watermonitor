@@ -1,16 +1,21 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 const Toast = ({ title, message, type = 'info', onClose }) => {
+    // Store latest onClose in a ref to avoid resetting the timer on every render
+    const onCloseRef = useRef(onClose);
+    useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
     useEffect(() => {
         const timer = setTimeout(() => {
-            onClose();
+            onCloseRef.current?.();
         }, 5000);
         return () => clearTimeout(timer);
-    }, [onClose]);
+    }, []); // run once on mount only
 
     const getIcon = () => {
         switch (type) {
             case 'danger':
+            case 'error':
                 return (
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />

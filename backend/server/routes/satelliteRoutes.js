@@ -186,8 +186,10 @@ router.get('/latest', async (req, res) => {
       } catch (error) {
         console.warn(`Real satellite refresh failed for ${river.name}: ${error.message}`);
         if (!observation) {
-          const geometry = typeof river.geometry === 'string' ? JSON.parse(river.geometry) : river.geometry;
-          const bbox = typeof river.bbox === 'string' ? JSON.parse(river.bbox) : river.bbox;
+          let geometry = river.geometry;
+          try { if (typeof geometry === 'string') geometry = JSON.parse(geometry); } catch (e) { geometry = null; }
+          let bbox = river.bbox;
+          try { if (typeof bbox === 'string') bbox = JSON.parse(bbox); } catch (e) { bbox = null; }
           return res.status(503).json({
             success: false,
             message: 'No real satellite observation is available yet. The live sensor dashboard remains fully operational.',
@@ -209,8 +211,10 @@ router.get('/latest', async (req, res) => {
       }
     }
 
-    const geometry = typeof river.geometry === 'string' ? JSON.parse(river.geometry) : river.geometry;
-    const bbox = typeof river.bbox === 'string' ? JSON.parse(river.bbox) : river.bbox;
+    let geometry = river.geometry;
+    try { if (typeof geometry === 'string') geometry = JSON.parse(geometry); } catch (e) { geometry = null; }
+    let bbox = river.bbox;
+    try { if (typeof bbox === 'string') bbox = JSON.parse(bbox); } catch (e) { bbox = null; }
 
     res.json({
       success: true,
@@ -626,6 +630,11 @@ router.post('/backfill', async (req, res) => {
 });
 
 function mapRiverApi(river) {
+  let geometry = river.geometry;
+  try { if (typeof geometry === 'string') geometry = JSON.parse(geometry); } catch (e) { geometry = null; }
+  let bbox = river.bbox;
+  try { if (typeof bbox === 'string') bbox = JSON.parse(bbox); } catch (e) { bbox = null; }
+  
   return {
     id: river.id,
     name: river.name,
@@ -633,8 +642,8 @@ function mapRiverApi(river) {
     country: river.country,
     latitude: river.latitude,
     longitude: river.longitude,
-    bbox: typeof river.bbox === 'string' ? JSON.parse(river.bbox) : river.bbox,
-    geometry: typeof river.geometry === 'string' ? JSON.parse(river.geometry) : river.geometry,
+    bbox: bbox,
+    geometry: geometry,
     length_km: river.length_km,
     basin: river.basin
   };
@@ -782,7 +791,7 @@ router.get('/image', (req, res) => {
   if (fs.existsSync(cachedFile)) {
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'public, max-age=86400');
-    return res.sendFile(cachedFile);
+    return res.sendFile(path.resolve(cachedFile));
   }
 
   const escapeXml = value => String(value).replace(/[<>&'"]/g, character => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[character]));

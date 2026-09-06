@@ -12,7 +12,7 @@ export default function MetricsGrid({ observation }) {
             <div className="metric-icon" style={{ color: '#38bdf8' }}>📏</div>
           </div>
           <div className="metric-value">
-            {observation.riverWidthMeters} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>m</span>
+            {observation.riverWidthMeters != null ? observation.riverWidthMeters.toFixed(1) : '—'} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>m</span>
           </div>
           <div className="metric-status good">
             <span>SWOT Reach Calibrated</span>
@@ -25,10 +25,10 @@ export default function MetricsGrid({ observation }) {
             <div className="metric-icon" style={{ color: '#06b6d4' }}>🌊</div>
           </div>
           <div className="metric-value">
-            {observation.waterAreaSqKm} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>km²</span>
+            {observation.waterAreaSqKm != null ? observation.waterAreaSqKm.toFixed(2) : '—'} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>km²</span>
           </div>
           <div className="metric-status good">
-            <span>{(observation.waterAreaSqKm * 100).toFixed(0)} Hectares</span>
+            <span>{observation.waterAreaSqKm != null ? (observation.waterAreaSqKm * 100).toFixed(0) : '—'} Hectares</span>
           </div>
         </div>
 
@@ -38,7 +38,7 @@ export default function MetricsGrid({ observation }) {
             <div className="metric-icon" style={{ color: '#f59e0b' }}>🌡️</div>
           </div>
           <div className="metric-value">
-            {observation.surfaceTemperatureC} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>°C</span>
+            {observation.surfaceTemperatureC != null ? observation.surfaceTemperatureC.toFixed(1) : '—'} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>°C</span>
           </div>
           <div className="metric-status good">
             <span>ERA5 Land Thermal</span>
@@ -51,7 +51,7 @@ export default function MetricsGrid({ observation }) {
             <div className="metric-icon" style={{ color: observation.turbidityNtu > 25 ? '#ef4444' : '#10b981' }}>🧪</div>
           </div>
           <div className="metric-value">
-            {observation.turbidityNtu} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>NTU</span>
+            {observation.turbidityNtu != null ? observation.turbidityNtu.toFixed(1) : '—'} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>NTU</span>
           </div>
           <div className={`metric-status ${observation.turbidityNtu < 15 ? 'good' : observation.turbidityNtu < 30 ? 'warning' : 'critical'}`}>
             <span>{observation.turbidityNtu < 15 ? 'Clear Water' : observation.turbidityNtu < 30 ? 'Moderate Turbidity' : 'High Turbidity'}</span>
@@ -64,7 +64,7 @@ export default function MetricsGrid({ observation }) {
             <div className="metric-icon" style={{ color: '#00f0ff' }}>💧</div>
           </div>
           <div className="metric-value" style={{ color: '#00f0ff' }}>
-            {observation.ndwi > 0 ? `+${observation.ndwi}` : observation.ndwi}
+            {observation.ndwi != null ? (observation.ndwi > 0 ? `+${observation.ndwi.toFixed(3)}` : observation.ndwi.toFixed(3)) : '—'}
           </div>
           <div className="metric-status good">
             <span>(B3 - B8) / (B3 + B8)</span>
@@ -77,7 +77,7 @@ export default function MetricsGrid({ observation }) {
             <div className="metric-icon" style={{ color: '#22c55e' }}>🌿</div>
           </div>
           <div className="metric-value" style={{ color: '#22c55e' }}>
-            +{observation.ndvi}
+            {observation.ndvi != null ? (observation.ndvi > 0 ? `+${observation.ndvi.toFixed(3)}` : observation.ndvi.toFixed(3)) : '—'}
           </div>
           <div className="metric-status good">
             <span>Dense Vegetative Buffer</span>
@@ -90,7 +90,7 @@ export default function MetricsGrid({ observation }) {
             <div className="metric-icon" style={{ color: observation.floodRiskPct > 50 ? '#ef4444' : '#3b82f6' }}>⚠️</div>
           </div>
           <div className="metric-value" style={{ color: observation.floodStatus === 'Low' ? 'var(--success-green)' : observation.floodStatus === 'Moderate' ? 'var(--warning-amber)' : 'var(--danger-red)' }}>
-            {observation.floodStatus} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>({observation.floodRiskPct}%)</span>
+            {observation.floodStatus || '—'} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>({observation.floodRiskPct != null ? observation.floodRiskPct.toFixed(0) : '—'}%)</span>
           </div>
           <div className={`metric-status ${observation.floodRiskPct < 30 ? 'good' : observation.floodRiskPct < 60 ? 'warning' : 'critical'}`}>
             <span>{observation.floodRiskPct < 30 ? 'Safe Margins' : 'Elevated Inflow'}</span>
@@ -103,7 +103,7 @@ export default function MetricsGrid({ observation }) {
             <div className="metric-icon" style={{ color: '#8b5cf6' }}>📈</div>
           </div>
           <div className="metric-value">
-            {observation.waterLevelMeters ?? '—'} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>m ASL</span>
+            {observation.waterLevelMeters != null ? observation.waterLevelMeters.toFixed(2) : '—'} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>m ASL</span>
           </div>
           <div className="metric-status good">
             <span>WSE Altimetry</span>

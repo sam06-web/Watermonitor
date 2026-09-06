@@ -8,6 +8,9 @@ export default defineConfig({
   build: {
     target: 'es2017'
   },
+  optimizeDeps: {
+    exclude: ['maplibre-gl']
+  },
   server: {
     host: true,
     port: 5173,

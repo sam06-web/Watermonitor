@@ -6,7 +6,7 @@ import AiInsights from './satellite/AiInsights';
 
 export default function SatelliteMonitoring({ onShowToast, observation, riverData, onWaterBodyChange, onAreaScanned }) {
   const handleSelectRiver = (river) => {
-    onWaterBodyChange?.(river.id);
+    onWaterBodyChange?.(river);
     if (onShowToast) {
       onShowToast({
         title: 'Satellite Scene Loaded',
@@ -46,7 +46,7 @@ export default function SatelliteMonitoring({ onShowToast, observation, riverDat
         </div>
       )}
 
-      {riverData && <RiverMap riverData={riverData} onAreaScanned={onAreaScanned} />}
+      {riverData && <RiverMap riverData={riverData} onAreaScanned={onAreaScanned} onShowToast={onShowToast} />}
 
       {observation && <MetricsGrid observation={observation} />}
 
