@@ -32,7 +32,7 @@ export default function EcoDashboard({
       tds: getSensorValue(realTimeData.tds),
       temperature: getSensorValue(waterQuality.temperature)
     };
-    const hasLiveSensorData = values.ph !== null || values.tds !== null || values.turbidity !== null;
+    const hasLiveSensorData = values.ph !== null && values.tds !== null && values.turbidity !== null;
     const analysis = hasLiveSensorData
       ? analyzeContamination({ ...values, satellite: satelliteObservation })
       : {

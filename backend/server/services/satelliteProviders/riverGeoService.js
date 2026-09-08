@@ -20,24 +20,14 @@ export class RiverGeoService {
       return localMatches.slice(0, 20);
     }
 
-    // 2. Query Nominatim — plain query only first, fall back to "<query> river"
-    //    only if the plain query returns no water features. This avoids the
-    //    original 3-request × 1.2s sequential delay (was ~3.6s minimum).
+    // 2. Query Nominatim — run plain query and "<query> river" in parallel.
     //    polygon_geojson, addressdetails, extratags are dropped — they add
     //    significant response size and we don't use them.
-    const nominatimParams = (q) => ({
-      q,
-      format: 'jsonv2',
-      namedetails: 1,
-      dedupe: 1,
-      limit: 15
-    });
-
     const fetchNominatim = async (q) => {
       const response = await axios.get('https://nominatim.openstreetmap.org/search', {
-        params: nominatimParams(q),
+        params: { q, format: 'jsonv2', namedetails: 1, dedupe: 1, limit: 15 },
         headers: { 'User-Agent': 'AquaSentinel-Water-Monitor/1.0 (water-quality-project)' },
-        timeout: 8000
+        timeout: 5000
       });
       return response.data || [];
     };
@@ -91,15 +81,21 @@ export class RiverGeoService {
     };
 
     try {
-      // First attempt: plain query
-      let items = await fetchNominatim(trimmed);
-      let results = parseItems(items);
+      // Run plain query and "<query> river" in parallel — halves worst-case latency.
+      const [plainItems, riverItems] = await Promise.all([
+        fetchNominatim(trimmed).catch(() => []),
+        fetchNominatim(`${trimmed} river`).catch(() => [])
+      ]);
 
-      if (results.length === 0) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        items = await fetchNominatim(`${trimmed} river`);
-        results = parseItems(items);
-      }
+      // Merge and dedup by osm_id before parsing
+      const seenIds = new Set();
+      const merged = [...plainItems, ...riverItems].filter(item => {
+        if (seenIds.has(item.osm_id)) return false;
+        seenIds.add(item.osm_id);
+        return true;
+      });
+
+      const results = parseItems(merged);
 
       // Batch-insert new results into the DB cache (fire-and-forget, non-blocking)
       if (results.length > 0) {
