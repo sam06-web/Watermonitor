@@ -24,7 +24,7 @@ export default function EcoDashboard({
   const { values, hasLiveSensorData, analysis } = useMemo(() => {
     const getSensorValue = value => {
       const numericValue = Number(value);
-      return Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : null;
+      return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : null;
     };
     const values = {
       ph: getSensorValue(waterQuality.ph),
