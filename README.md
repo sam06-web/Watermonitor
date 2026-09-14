@@ -61,8 +61,7 @@ Open http://localhost:5173 (Vite).
 
 1. Push this repository to GitHub.
 2. In Render, select **New > Blueprint** and choose the repository. Render reads
-   `render.yaml` and deploys both the Express API and its internal Flask
-   satellite/ML service. Add the values from
+   `render.yaml` and deploys the Express API as a single Web Service. Add the values from
    `backend/.env` as Render environment variables; do not commit that file.
 3. Copy the resulting Render service URL, such as
    `https://aquasense-api.onrender.com`, and set `CORS_ORIGIN` in Render to the
@@ -80,7 +79,10 @@ Open http://localhost:5173 (Vite).
 `VITE_*` variables are embedded in the browser bundle. Never put MongoDB,
 NASA, or server-side AI secrets in a Netlify variable. The MQTT subscription
 connects from the browser to the configured broker, so its topic continues to
-stream independently of Render.
+stream independently of Render. The API includes an embedded water-quality
+classifier fallback. Satellite processing requires the optional Flask ML
+service to be deployed separately later and its public URL supplied as
+`WATER_QUALITY_MODEL_URL` in Render.
 
 ## API Overview
 
