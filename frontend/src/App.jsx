@@ -182,7 +182,10 @@ function App() {
   // MQTT Connection Effect
   useEffect(() => {
     const brokerUrl = localStorage.getItem('mqtt-broker') || DEFAULT_MQTT.BROKER;
-    const topic = localStorage.getItem('mqtt-topic') || DEFAULT_MQTT.TOPIC;
+    const configuredTopic = localStorage.getItem('mqtt-topic');
+    // Always consume the production floating-sensor stream. A user-configured
+    // topic remains available as an additional subscription for other devices.
+    const topics = [...new Set([DEFAULT_MQTT.TOPIC, configuredTopic].filter(Boolean))];
 
     const isSecure = window.location.protocol === 'https:';
     let processedBrokerUrl = brokerUrl ? brokerUrl.trim() : '';
@@ -221,12 +224,10 @@ function App() {
         console.log('Successfully connected to MQTT Broker at', processedBrokerUrl);
         setMqttStatus('connected');
 
-        // Subscribe to the sensor data topic
-        client.subscribe(topic, (err) => {
-          if (!err) console.log(`Subscribed to topic: ${topic}`);
+        // Subscribe to the floating sensor stream (and an optional custom topic).
+        client.subscribe(topics, (err) => {
+          if (!err) console.log(`Subscribed to topics: ${topics.join(', ')}`);
         });
-        // Also subscribe to the hardcoded fallback so messages arrive regardless of config
-        client.subscribe('water/data');
       });
 
       client.on('error', (err) => {
@@ -245,20 +246,22 @@ function App() {
       });
 
       client.on('message', (receivedTopic, message) => {
-        if (receivedTopic !== topic && receivedTopic !== 'water/data') return;
+        if (!topics.includes(receivedTopic)) return;
 
         try {
           const payload = JSON.parse(message.toString());
           if (!payload || typeof payload !== 'object') return;
 
-          // Expected hardware payload variants:
-          // { ph/pH, turbidity/turb/ntu, tds_ppm/tds/TDS/ppm, temp/temperature, lat, lng }
+          // Floating sensor payload:
+          // { device_id, pH, tds_ppm, turbidity_ntu, temperature_c, ai }
+          // The publisher's `ai` object is intentionally ignored; this app
+          // calculates its own display and water-quality analysis from readings.
           const phVal = payload.ph ?? payload.pH ?? payload.PH;
           if (phVal !== undefined && Number.isFinite(Number(phVal))) {
             setWaterQualityMetrics(prev => ({ ...prev, ph: Number(phVal) }));
           }
 
-          const turbVal = payload.turbidity ?? payload.turb ?? payload.NTU ?? payload.ntu;
+          const turbVal = payload.turbidity_ntu ?? payload.turbidity ?? payload.turb ?? payload.NTU ?? payload.ntu;
           if (turbVal !== undefined && Number.isFinite(Number(turbVal))) {
             setWaterQualityMetrics(prev => ({ ...prev, turbidity: Number(turbVal) }));
           }
@@ -286,9 +289,9 @@ function App() {
             });
 
             const analysis = analyzeContamination({
-              ph: payload.ph ?? 7.2,
-              tds: payload.tds_ppm ?? 420,
-              turbidity: payload.turbidity ?? 2.1,
+              ph: phVal !== undefined ? Number(phVal) : 7.2,
+              tds: tdsVal !== undefined ? Number(tdsVal) : 420,
+              turbidity: turbVal !== undefined ? Number(turbVal) : 2.1,
               temperature: tempVal !== undefined ? Number(tempVal) : 24.0,
               satellite: satelliteObservationRef.current
             });
@@ -298,14 +301,14 @@ function App() {
                 id: pinId,
                 lat: Number(payload.lat),
                 lng: Number(payload.lng),
-                location: 'Sensor station',
+                location: payload.device_id || 'Sensor station',
                 severity: analysis.risk,
                 qualityScore: analysis.score,
                 contaminationType: analysis.type,
                 cause: analysis.cause,
-                ph: payload.ph,
-                tds: payload.tds_ppm,
-                turbidity: payload.turbidity,
+                ph: phVal !== undefined ? Number(phVal) : undefined,
+                tds: tdsVal !== undefined ? Number(tdsVal) : undefined,
+                turbidity: turbVal !== undefined ? Number(turbVal) : undefined,
                 temperature: tempVal !== undefined ? Number(tempVal) : 24.0,
                 source: 'sensor'
               };

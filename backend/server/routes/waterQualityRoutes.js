@@ -142,7 +142,14 @@ router.get('/sensor-history', async (req, res) => {
  */
 router.post(['/sensor-readings', '/readings/insert'], async (req, res) => {
   try {
-    const { ph, tds, turbidity, temperature, riverId, riverName, source } = req.body || {};
+    const body = req.body || {};
+    // Accept the floating-sensor MQTT shape when telemetry is forwarded to this
+    // endpoint. Deliberately do not read or store body.ai.
+    const ph = body.ph ?? body.pH;
+    const tds = body.tds ?? body.tds_ppm;
+    const turbidity = body.turbidity ?? body.turbidity_ntu;
+    const temperature = body.temperature ?? body.temperature_c;
+    const { riverId, riverName, source, device_id: deviceId } = body;
 
     const isValidNumber = v => v != null && String(v).trim() !== '' && !isNaN(Number(v));
     if (![ph, tds, turbidity].every(isValidNumber)) {
@@ -150,13 +157,13 @@ router.post(['/sensor-readings', '/readings/insert'], async (req, res) => {
     }
 
     const saved = await RiverDB.insertSensorReading({
-      river_id: riverId || 'global',
-      river_name: riverName || 'Global Water Body',
+      river_id: riverId || deviceId || 'global',
+      river_name: riverName || deviceId || 'Global Water Body',
       ph: Number(ph),
       tds: Number(tds),
       turbidity: Number(turbidity),
       temperature: temperature !== undefined ? Number(temperature) : 24.0,
-      source: source || 'iot_sensor_stream',
+      source: source || 'floating_sensor_mqtt',
       timestamp: new Date().toISOString()
     });
 
