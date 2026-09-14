@@ -4,7 +4,8 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: './',
+  // Absolute asset paths are required when Netlify serves a client-side route.
+  base: '/',
   build: {
     target: 'es2017'
   },

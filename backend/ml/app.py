@@ -61,4 +61,5 @@ def predict():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.getenv('ML_PORT', '5001')))
+    # Render provides PORT. ML_PORT retains compatibility with local runs.
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', os.getenv('ML_PORT', '5001'))))

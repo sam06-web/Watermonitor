@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: aquasense-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB_NAME
+        value: aquasense
+      - key: CORS_ORIGIN
+        sync: false
+      - key: WATER_QUALITY_MODEL_URL
+        fromService:
+          type: pserv
+          name: aquasense-ml
+          property: hostport
+      - key: NASA_EARTHDATA_TOKEN
+        sync: false
+      - key: NASA_EARTHDATA_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+  - type: pserv
+    name: aquasense-ml
+    runtime: python
+    rootDir: backend/ml
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    healthCheckPath: /health
+    autoDeploy: true

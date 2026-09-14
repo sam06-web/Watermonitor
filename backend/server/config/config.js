@@ -13,7 +13,12 @@ export const config = {
   port: process.env.PORT || 5050,
   nodeEnv: process.env.NODE_ENV || 'development',
   ml: {
-    url: process.env.WATER_QUALITY_MODEL_URL || 'http://127.0.0.1:5001'
+    // Render's service reference supplies an internal host:port. Local and
+    // externally hosted services can continue to supply a complete URL.
+    url: (() => {
+      const value = process.env.WATER_QUALITY_MODEL_URL || 'http://127.0.0.1:5001';
+      return /^https?:\/\//.test(value) ? value : `http://${value}`;
+    })()
   },
   
   // Database Configuration

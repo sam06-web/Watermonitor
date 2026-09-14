@@ -11,7 +11,15 @@ const app = express();
 await initDatabase();
 
 // Middleware
-app.use(cors());
+// In production, set CORS_ORIGIN to the Netlify site URL. A comma-separated
+// list is supported for preview deployments. Omitting it preserves local setup.
+const allowedOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+app.use(cors({
+  origin: allowedOrigins.length ? allowedOrigins : true
+}));
 app.use(express.json());
 
 // Request logging in dev

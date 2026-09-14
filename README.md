@@ -57,6 +57,31 @@ npm run ml           # Flask ML service only
 
 Open http://localhost:5173 (Vite).
 
+## Deploy: Render + Netlify
+
+1. Push this repository to GitHub.
+2. In Render, select **New > Blueprint** and choose the repository. Render reads
+   `render.yaml` and deploys both the Express API and its internal Flask
+   satellite/ML service. Add the values from
+   `backend/.env` as Render environment variables; do not commit that file.
+3. Copy the resulting Render service URL, such as
+   `https://aquasense-api.onrender.com`, and set `CORS_ORIGIN` in Render to the
+   eventual Netlify site URL.
+4. In Netlify, import the repository with these build settings:
+
+   - Base directory: `frontend`
+   - Build command: `npm run build`
+   - Publish directory: `dist`
+
+   Set `VITE_API_URL` to the Render URL from step 3 (no trailing slash), then
+   deploy. If Netlify uses `frontend` as its base directory, its configuration
+   file is picked up automatically.
+
+`VITE_*` variables are embedded in the browser bundle. Never put MongoDB,
+NASA, or server-side AI secrets in a Netlify variable. The MQTT subscription
+connects from the browser to the configured broker, so its topic continues to
+stream independently of Render.
+
 ## API Overview
 
 | Endpoint | Description |
